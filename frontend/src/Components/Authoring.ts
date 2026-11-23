@@ -2,6 +2,8 @@ import { authoringApi } from '../Api/Authoring';
 import type { Draft, DraftSummary, Template } from '../Types/Authoring';
 import { escape } from '../Utils/Html';
 import '../authoring.css';
+import { llmApi } from '../Api/Llm';
+import { LlmSettingsPage } from './LlmSettings';
 
 export class AuthoringWorkspace {
   private templates: Template[] = [];
@@ -16,14 +18,17 @@ export class AuthoringWorkspace {
   private busy = false;
   private message = '';
   private failed = false;
+  private aiReady = false;
+  private instructions = '';
 
-  constructor(private root: HTMLElement, private back: () => void) {}
+  constructor(private root: HTMLElement, private back: () => void, private isAdmin = false) {}
 
   async open(): Promise<void> {
     this.render();
     await this.run(async () => {
       [this.templates, this.drafts] = await Promise.all([authoringApi.templates(), authoringApi.drafts()]);
       this.selected = this.templates[0]?.id || '';
+      this.aiReady = (await llmApi.status()).ready;
     });
   }
 
@@ -70,6 +75,10 @@ export class AuthoringWorkspace {
                 <button class="button button-primary" type="submit" data-testid="generate-draft" ${!template ? 'disabled' : ''}>${this.draft ? '更新参数并重新生成' : '生成文档草稿'}</button></form>
               ${this.draft ? `<div class="draft-preview" data-testid="draft-preview"><div class="section-title"><h2>正文预览与修改</h2><span data-testid="draft-revision">修订 ${this.draft.revision}</span></div>
                 <p class="control-note" data-testid="draft-origin">来源：${this.draft.snapshot.origin === 'ai' ? 'AI 辅助编写' : this.draft.snapshot.origin === 'manual' ? '人工修订' : '参数化模板'} · 待人工复核</p>
+                <div class="ai-draft-panel"><h3>AI 辅助编写</h3><p class="control-note" data-testid="ai-status">${this.aiReady ? '模型已启用；将向配置的服务发送已保存草稿和编写要求，请确认资料允许发送。AI 会覆盖当前章节并保存为新修订。' : '模型尚未启用，可先使用模板和人工编辑。'}所有生成内容均需人工复核。</p>
+                  ${this.isAdmin ? '<button type="button" class="text-button" id="open-llm-settings" data-testid="open-llm-settings">管理模型配置</button>' : ''}
+                  <label class="section-editor">编写要求<textarea rows="3" maxlength="4000" data-testid="ai-instructions" id="ai-instructions" placeholder="例如：细化检验步骤，缺失限值标记待确认">${escape(this.instructions)}</textarea></label>
+                  <button type="button" class="button button-secondary" id="ai-draft" data-testid="ai-draft" ${!this.aiReady ? 'disabled' : ''}>按已保存草稿进行 AI 编写</button></div>
                 <form id="sections-form">${this.draft.snapshot.sections.map((section) => `<label class="section-editor">${escape(section.title)}<textarea required rows="5" maxlength="12000" data-section="${section.id}" data-testid="section-${section.id}">${escape(this.sections[section.id] || '')}</textarea></label>`).join('')}
                   <button type="submit" class="button button-secondary" data-testid="save-draft">保存正文修订</button></form>
                 <label class="section-editor">变更原因（更新参数或保存正文时必填，至少5字）<input data-testid="draft-reason" id="draft-reason" minlength="5" maxlength="500" value="${escape(this.reason)}"></label>
@@ -84,6 +93,15 @@ export class AuthoringWorkspace {
   }
 
   private bind(): void {
+    this.root.querySelector('#open-llm-settings')?.addEventListener('click', () => {
+      void new LlmSettingsPage(this.root, () => { void this.run(async () => { this.aiReady = (await llmApi.status()).ready; }); }).open();
+    });
+    this.root.querySelector<HTMLTextAreaElement>('#ai-instructions')?.addEventListener('input', (event) => { this.instructions = (event.target as HTMLTextAreaElement).value; });
+    this.root.querySelector('#ai-draft')?.addEventListener('click', () => { void this.run(async () => {
+      if (this.instructions.trim().length < 5) throw new Error('请填写至少5字的编写要求');
+      this.useDraft(await llmApi.draft(this.draft!, this.instructions));
+      this.drafts = await authoringApi.drafts();
+    }, 'AI 已生成新修订，请逐项核对事实、参数和待确认事项。'); });
     this.root.querySelector('#back-precheck')?.addEventListener('click', this.back);
     this.root.querySelector<HTMLFormElement>('#template-search-form')?.addEventListener('submit', (event) => {
       event.preventDefault(); this.query = this.root.querySelector<HTMLInputElement>('#template-query')!.value;

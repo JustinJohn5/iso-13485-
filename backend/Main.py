@@ -10,7 +10,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from App.Api import Auth, Authoring, DocumentReviews, Documents, System
+from App.Api import Auth, Authoring, DocumentReviews, Documents, LlmSettings, System
 from App.Config.Settings import SettingsError, get_settings
 from App.Services.Rules.RuleSetLoader import RuleSetLoader
 from App.Utils.Errors import ApiError
@@ -82,4 +82,5 @@ app.include_router(Auth.router)
 app.include_router(Documents.router)
 app.include_router(DocumentReviews.router)
 app.include_router(Authoring.router)
+app.include_router(LlmSettings.router)
 

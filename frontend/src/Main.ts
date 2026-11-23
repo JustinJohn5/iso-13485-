@@ -6,6 +6,7 @@ import { escape } from './Utils/Html';
 import { bindReviewEvents, renderDocumentReview, renderMetadata } from './Components/DocumentReview';
 import type { ControlMetadata, DocumentReview, MetadataChanges } from './Types/DocumentControl';
 import { AuthoringWorkspace } from './Components/Authoring';
+import { LlmSettingsPage } from './Components/LlmSettings';
 
 type QueueItem = { file: File; type: string; uid?: string; error?: string; detection?: TypeDetection; warnings?: string[]; metadata?: ControlMetadata; changes?: MetadataChanges };
 const root = document.querySelector<HTMLDivElement>('#app')!;
@@ -69,6 +70,7 @@ function render(): void {
         <div class="side-label">工作区</div>
         <button data-testid="precheck-nav" class="nav-item active"><span class="nav-symbol">▦</span>文件预筛</button>
         <button data-testid="templates-nav" class="nav-item" id="templates-nav"><span class="nav-symbol">▤</span>模板与编写</button>
+        ${user.role === 'admin' ? '<button data-testid="llm-settings-nav" class="nav-item" id="llm-settings-nav"><span class="nav-symbol">⚙</span>模型配置</button>' : ''}
         <button data-testid="rules-nav" class="nav-item" id="rules-nav"><span class="nav-symbol">≡</span>规则说明</button>
         <div class="sidebar-bottom"><div class="standard-tag"><span class="status-dot"></span><span>规则包已就绪<small>ISO 13485:2016 · v1.0.1</small></span></div><button ${busy ? 'disabled' : ''} data-testid="logout" id="logout" class="logout">退出登录</button></div>
       </aside>
@@ -102,7 +104,10 @@ function render(): void {
 
 function bindEvents(): void {
   root.querySelector('#templates-nav')?.addEventListener('click', () => {
-    if (!busy) void new AuthoringWorkspace(root, render).open();
+    if (!busy) void new AuthoringWorkspace(root, render, user?.role === 'admin').open();
+  });
+  root.querySelector('#llm-settings-nav')?.addEventListener('click', () => {
+    if (!busy) void new LlmSettingsPage(root, render).open();
   });
   const input = root.querySelector<HTMLInputElement>('#file-input')!;
   root.querySelector('#browse')!.addEventListener('click', () => input.click());

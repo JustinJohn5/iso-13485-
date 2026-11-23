@@ -13,11 +13,28 @@ from App.Models.ValidationRun import ValidationRun
 from App.Models.User import User
 from App.Models.UploadedFile import UploadedFile
 from App.Models.AuditLog import AuditLog
+from App.Models.DocumentDraft import DocumentDraft
+from App.Models.LlmConfig import LlmConfig
 
 if os.environ.get('APP_ENV') != 'test' or not (make_url(os.environ['DATABASE_URL']).database or '').endswith('_codextest'):
     raise SystemExit('拒绝连接非测试数据库')
 
 with session_scope() as db:
+    if sys.argv[1] == '--draft':
+        row = db.execute(select(DocumentDraft).where(DocumentDraft.draft_uid == sys.argv[2])).scalar_one()
+        assert row.revision == int(sys.argv[3]) and len(row.history) == int(sys.argv[3]), '草稿修订未正确持久化'
+        assert row.history[0]['snapshot']['parameters']['model'] == 'MODEL-A', '旧参数快照被覆盖'
+        audit = db.execute(select(AuditLog).where(AuditLog.target_id == row.draft_uid)).scalars().all()
+        assert {'draft_create', 'draft_update', 'draft_export'}.issubset({item.action for item in audit}), '草稿操作未留痕'
+        raise SystemExit(0)
+    if sys.argv[1] == '--llm':
+        from App.Utils.Crypto import decrypt_secret
+        config = db.execute(select(LlmConfig).where(LlmConfig.name == 'default')).scalar_one()
+        key = sys.argv[2]
+        assert config.api_key_cipher != key and decrypt_secret(config.api_key_cipher) == key, '密钥未加密存储'
+        logs = db.execute(select(AuditLog).where(AuditLog.action == 'llm_settings_update', AuditLog.user_id == config.updated_by)).scalars().all()
+        assert logs and all(key not in item.detail for item in logs), '配置审计缺失或泄露密钥'
+        raise SystemExit(0)
     if sys.argv[1] == '--review':
         run = db.execute(select(ValidationRun).where(ValidationRun.run_uid == sys.argv[2])).scalar_one()
         frozen = run.review_snapshot

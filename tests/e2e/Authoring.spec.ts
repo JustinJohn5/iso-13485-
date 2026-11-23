@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { login, watchPage } from './Helpers';
+import { spawnSync } from 'node:child_process';
 
 async function openAuthoring(page: import('@playwright/test').Page) {
   await login(page);
@@ -52,6 +53,8 @@ test('检索、生成、参数联动、修订与历史 Word 下载', async ({ pa
   const data = (await stored.json()).data;
   expect(data.history).toHaveLength(3);
   expect(data.snapshot.parameters.model).toBe('MODEL-B');
+  const check = spawnSync(process.env.E2E_PYTHON!, ['tests/Helpers/E2eDatabase.py', '--draft', draft.draft_uid, '3'], { encoding: 'utf8', env: process.env });
+  expect(check.status, check.stdout + check.stderr).toBe(0);
   await assertClean();
 });
 

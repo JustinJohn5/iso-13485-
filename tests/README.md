@@ -43,6 +43,9 @@ macOS / Ubuntu：
 
 ## 目录及覆盖范围
 
+- `tests/Services/test_AiDraft.py`：SDK 超时/重试配置、脱敏日志、未配置拒绝、异常 JSON 和章节合同；使用合成数据与模拟客户端，不调用真实模型。
+- `tests/e2e/LlmSettings.spec.ts`：管理员配置、API Key 密文入库且不回显、审核员越权拒绝、实际模型调用失败后保留草稿。测试结束仅在配置仍由本次账号修改时恢复原测试库配置，不触碰开发/正式配置。
+
 - `tests/Services/test_TemplateLibrary.py`：模板检索、输入边界、参数联动、历史隔离及真实 Word 内容。
 - `tests/e2e/Authoring.spec.ts`：检索、生成、编辑、参数更新、历史下载、乐观锁和跨用户访问；草稿数据保存在独立 MySQL 测试库，结束后随本次测试用户清理。
 

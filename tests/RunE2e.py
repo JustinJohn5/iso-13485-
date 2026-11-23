@@ -38,6 +38,7 @@ def main() -> int:
     from App.Models.DocumentReview import DocumentReview
     from App.Models.AuditLog import AuditLog
     from App.Models.DocumentDraft import DocumentDraft
+    from App.Models.LlmConfig import LlmConfig
     from App.Utils.Security import hash_password
 
     settings = get_settings()
@@ -67,6 +68,8 @@ def main() -> int:
     other_email = f'e2e-other-{secrets.token_hex(6)}@example.com'
     other_password = secrets.token_urlsafe(24)
     with session_scope() as db:
+        llm_row = db.execute(select(LlmConfig).where(LlmConfig.name == 'default')).scalar_one_or_none()
+        llm_backup = {column.name: getattr(llm_row, column.name) for column in LlmConfig.__table__.columns} if llm_row else None
         user = User(email=email, display_name='自动化测试账号', password_hash=hash_password(password), role=ROLE_ADMIN)
         db.add(user)
         other = User(email=other_email, display_name='隔离权限测试账号', password_hash=hash_password(other_password), role='auditor')
@@ -112,6 +115,13 @@ def main() -> int:
         for output in logs:
             output.close()
         with session_scope() as db:
+            llm_row = db.execute(select(LlmConfig).where(LlmConfig.name == 'default')).scalar_one_or_none()
+            if llm_row and llm_row.updated_by in user_ids:
+                if llm_backup:
+                    for key, value in llm_backup.items():
+                        setattr(llm_row, key, value)
+                else:
+                    db.delete(llm_row)
             run_ids = select(ValidationRun.id).where(ValidationRun.created_by.in_(user_ids))
             db.execute(delete(Finding).where(Finding.run_id.in_(run_ids)))
             db.execute(delete(ValidationDocument).where(ValidationDocument.run_id.in_(run_ids)))
