@@ -5,6 +5,7 @@ from time import monotonic
 
 from openai import APIError, OpenAI
 
+from App.Constants.AuthoringLimits import MAX_INPUT_CHARS, MAX_RESPONSE_CHARS
 from App.Dao.LlmConfigDao import LlmConfigDao
 from App.Utils.Crypto import decrypt_secret
 from App.Utils.Errors import ApiError
@@ -18,8 +19,8 @@ def complete_json(db, system: str, payload: dict) -> tuple[dict, str]:
         raise ApiError(1401)
     key = decrypt_secret(config.api_key_cipher)
     content = json.dumps(payload, ensure_ascii=False)
-    if len(content) > 50000:
-        raise ApiError(1001, '当前草稿上下文过长，请缩短正文后再进行 AI 编写')
+    if len(system) + len(content) > MAX_INPUT_CHARS:
+        raise ApiError(1001, f'AI 请求总输入超过 {MAX_INPUT_CHARS:,} 字符，请减少资料或分批编写；原草稿未修改')
     started = monotonic()
     # 禁止 SDK/HTTP 的 DEBUG 请求日志记录正文及认证头。
     for name in ('openai', 'httpx', 'httpx2', 'httpcore'):
@@ -36,7 +37,7 @@ def complete_json(db, system: str, payload: dict) -> tuple[dict, str]:
         if not response.choices or response.choices[0].finish_reason != 'stop':
             raise ValueError('模型输出不完整')
         text = response.choices[0].message.content or ''
-        if len(text) > 60000:
+        if len(text) > MAX_RESPONSE_CHARS:
             raise ValueError('模型输出过长')
         if text.strip().startswith('```'):
             text = '\n'.join(text.strip().splitlines()[1:-1])

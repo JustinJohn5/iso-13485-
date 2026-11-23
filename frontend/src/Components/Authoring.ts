@@ -5,6 +5,7 @@ import '../authoring.css';
 import { llmApi } from '../Api/Llm';
 import { LlmSettingsPage } from './LlmSettings';
 import { DraftBatchPanel } from './DraftBatch';
+import { AUTHORING_LIMITS } from '../Constants/AuthoringLimits';
 
 export class AuthoringWorkspace {
   private templates: Template[] = [];
@@ -54,7 +55,7 @@ export class AuthoringWorkspace {
     const visible = this.templates.filter((item) => (!this.category || item.category === this.category) &&
       this.query.toLocaleLowerCase().split(/\s+/).every((word) => `${item.title}${item.category}${item.description}`.toLocaleLowerCase().includes(word)));
     const fields = template?.fields.map((field) => `<label>${escape(field.label)}${field.multiline ?
-      `<textarea required rows="4" maxlength="8000" data-parameter="${field.key}" data-testid="parameter-${field.key}">${escape(this.parameters[field.key] || '')}</textarea>` :
+      `<textarea required rows="4" maxlength="${AUTHORING_LIMITS.requirements}" data-parameter="${field.key}" data-testid="parameter-${field.key}">${escape(this.parameters[field.key] || '')}</textarea><small class="control-note">最多10万字符，可粘贴详细产品资料及依据。</small>` :
       `<input required maxlength="120" data-parameter="${field.key}" data-testid="parameter-${field.key}" value="${escape(this.parameters[field.key] || '')}">`}</label>`).join('') || '';
     this.root.innerHTML = `<div class="app-shell">
       <aside class="sidebar"><a class="brand" href="#"><span class="brand-mark">Q</span><span><b>QMS</b><small>DOCUMENT AUTHORING</small></span></a>
@@ -80,9 +81,9 @@ export class AuthoringWorkspace {
                 <p class="control-note" data-testid="draft-origin">来源：${this.draft.snapshot.origin === 'ai' ? 'AI 辅助编写' : this.draft.snapshot.origin === 'manual' ? '人工修订' : '参数化模板'} · 待人工复核</p>
                 <div class="ai-draft-panel"><h3>AI 辅助编写</h3><p class="control-note" data-testid="ai-status">${this.aiReady ? '模型已启用；将向配置的服务发送已保存草稿和编写要求，请确认资料允许发送。AI 会覆盖当前章节并保存为新修订。' : '模型尚未启用，可先使用模板和人工编辑。'}所有生成内容均需人工复核。</p>
                   ${this.isAdmin ? '<button type="button" class="text-button" id="open-llm-settings" data-testid="open-llm-settings">管理模型配置</button>' : ''}
-                  <label class="section-editor">编写要求<textarea rows="3" maxlength="4000" data-testid="ai-instructions" id="ai-instructions" placeholder="例如：细化检验步骤，缺失限值标记待确认">${escape(this.instructions)}</textarea></label>
+                  <label class="section-editor">编写要求（最多3万字符）<textarea rows="3" maxlength="${AUTHORING_LIMITS.instructions}" data-testid="ai-instructions" id="ai-instructions" placeholder="例如：细化检验步骤，缺失限值标记待确认">${escape(this.instructions)}</textarea></label>
                   <button type="button" class="button button-secondary" id="ai-draft" data-testid="ai-draft" ${!this.aiReady ? 'disabled' : ''}>按已保存草稿进行 AI 编写</button></div>
-                <form id="sections-form">${this.draft.snapshot.sections.map((section) => `<label class="section-editor">${escape(section.title)}<textarea required rows="5" maxlength="12000" data-section="${section.id}" data-testid="section-${section.id}">${escape(this.sections[section.id] || '')}</textarea></label>`).join('')}
+                <form id="sections-form">${this.draft.snapshot.sections.map((section) => `<label class="section-editor">${escape(section.title)}<textarea required rows="5" maxlength="${AUTHORING_LIMITS.section}" data-section="${section.id}" data-testid="section-${section.id}">${escape(this.sections[section.id] || '')}</textarea></label>`).join('')}
                   <button type="submit" class="button button-secondary" data-testid="save-draft">保存正文修订</button></form>
                 <label class="section-editor">变更原因（更新参数或保存正文时必填，至少5字）<input data-testid="draft-reason" id="draft-reason" minlength="5" maxlength="500" value="${escape(this.reason)}"></label>
                 <div class="draft-actions"><button type="button" class="button button-primary" id="download-draft" data-testid="download-draft">下载 Word 草稿</button><button type="button" class="button button-secondary" id="reload-draft" data-testid="reload-draft">重新加载已保存版本</button></div>

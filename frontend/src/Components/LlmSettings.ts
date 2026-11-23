@@ -1,5 +1,6 @@
 import { llmApi, type LlmConfig } from '../Api/Llm';
 import { escape } from '../Utils/Html';
+import { AUTHORING_LIMITS } from '../Constants/AuthoringLimits';
 import '../authoring.css';
 
 export class LlmSettingsPage {
@@ -31,10 +32,11 @@ export class LlmSettingsPage {
             <div class="authoring-fields"><label>服务地址（包含服务商要求的 API 前缀）<input type="url" required maxlength="255" id="llm-url" data-testid="llm-url" value="${escape(config.base_url)}"></label>
               <label>模型标识<input required maxlength="128" id="llm-model" data-testid="llm-model" value="${escape(config.model)}"></label>
               <label>API Key<input type="password" autocomplete="new-password" maxlength="256" id="llm-key" data-testid="llm-key" value="" placeholder="${config.api_key_configured ? '已配置；留空保留' : '尚未配置'}"></label>
-              <label>单次超时（秒，5～120）<input type="number" required min="5" max="120" id="llm-timeout" data-testid="llm-timeout" value="${config.timeout_seconds}"></label>
-              <label>最大输出 token（256～16000）<input type="number" required min="256" max="16000" id="llm-tokens" data-testid="llm-tokens" value="${config.max_tokens}"></label>
+              <label>单次超时（秒，5～${AUTHORING_LIMITS.timeoutSeconds}）<input type="number" required min="5" max="${AUTHORING_LIMITS.timeoutSeconds}" id="llm-timeout" data-testid="llm-timeout" value="${config.timeout_seconds}"></label>
+              <label>最大输出 token（256～${AUTHORING_LIMITS.outputTokens}）<input type="number" required min="256" max="${AUTHORING_LIMITS.outputTokens}" id="llm-tokens" data-testid="llm-tokens" value="${config.max_tokens}"></label>
               <label>温度（0～2）<input type="number" required min="0" max="2" step="0.01" id="llm-temperature" data-testid="llm-temperature" value="${config.temperature}"></label></div>
             <p class="control-note" data-testid="llm-key-status">密钥状态：${config.api_key_configured ? '已配置' : '未配置'}</p>
+            <p class="control-note" data-testid="llm-capacity-note">应用接受最多100万字符的总输入；字符数不等同于 token。实际输入与输出合计受所选模型上下文窗口约束，最大输出还受服务商限制，请按模型能力设置。</p>
             <button class="button button-primary" type="submit" data-testid="save-llm-settings">${this.busy ? '正在保存…' : '保存配置'}</button>
             <p class="control-note">最多重试1次；服务不可用时保留原草稿。保存配置仅校验字段，不代表已经连通服务；可在草稿中发起 AI 编写验证。</p>
           </fieldset></form></section>` : this.busy ? '<p role="status">正在加载配置…</p>' : '<button class="button button-secondary" id="retry-settings">重新加载</button>'}

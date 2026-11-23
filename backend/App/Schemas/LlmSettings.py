@@ -3,6 +3,8 @@ from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from App.Constants.AuthoringLimits import MAX_INSTRUCTIONS_CHARS, MAX_OUTPUT_TOKENS, MAX_TIMEOUT_SECONDS
+
 
 class LlmSettingsUpdate(BaseModel):
     model_config = ConfigDict(extra='forbid')
@@ -10,8 +12,8 @@ class LlmSettingsUpdate(BaseModel):
     base_url: str = Field(min_length=8, max_length=255)
     model: str = Field(min_length=1, max_length=128)
     api_key: str | None = Field(default=None, max_length=256)
-    timeout_seconds: int = Field(ge=5, le=120)
-    max_tokens: int = Field(ge=256, le=16000)
+    timeout_seconds: int = Field(ge=5, le=MAX_TIMEOUT_SECONDS)
+    max_tokens: int = Field(ge=256, le=MAX_OUTPUT_TOKENS)
     temperature: float = Field(ge=0, le=2)
 
     @field_validator('base_url')
@@ -48,7 +50,7 @@ class LlmSettingsUpdate(BaseModel):
 class AiDraftRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
     revision: int = Field(ge=1)
-    instructions: str = Field(min_length=5, max_length=4000)
+    instructions: str = Field(min_length=5, max_length=MAX_INSTRUCTIONS_CHARS)
 
     @field_validator('instructions')
     @classmethod

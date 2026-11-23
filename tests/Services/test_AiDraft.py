@@ -1,11 +1,15 @@
 """AI 合同、失败保留及敏感日志回归，不调用外部真实模型。"""
 from copy import deepcopy
+import json
 from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
 
 from App.Schemas.LlmSettings import LlmSettingsUpdate
+from App.Schemas.LlmSettings import AiDraftRequest
+from App.Constants.AuthoringLimits import (MAX_INPUT_CHARS, MAX_RESPONSE_CHARS, MAX_REQUIREMENTS_CHARS,
+                                          MAX_INSTRUCTIONS_CHARS, MAX_OUTPUT_TOKENS, MAX_TIMEOUT_SECONDS)
 from App.Services.Authoring import AiDraft
 from App.Services.Authoring.TemplateLibrary import build_snapshot
 from App.Services.Llm import Client
@@ -97,3 +101,57 @@ def test_unconfigured_model_is_explicitly_rejected(monkeypatch):
 def test_config_rejects_invalid_service_urls(url):
     with pytest.raises(ValidationError):
         LlmSettingsUpdate(enabled=True, base_url=url, model='test', api_key='test-only', timeout_seconds=10, max_tokens=1000, temperature=0.2)
+
+
+def test_long_ai_input_and_response_are_preserved_without_truncation(monkeypatch):
+    snapshot = sample()
+    snapshot['parameters']['requirements'] = '资' * (MAX_REQUIREMENTS_CHARS - 4) + '输入末尾'
+    snapshot['sections'][1]['body'] = snapshot['parameters']['requirements']
+    original = deepcopy(snapshot)
+    sections = {item['id']: '文' * 20000 + '输出末尾' for item in snapshot['sections']}
+    calls = mock_client(monkeypatch, text=json.dumps({'sections': sections}, ensure_ascii=False))
+    instructions = '要' * (MAX_INSTRUCTIONS_CHARS - 4) + '要求末尾'
+    AiDraftRequest(revision=1, instructions=instructions)
+    result = AiDraft.generate_ai_draft(None, snapshot, instructions)
+    sent = json.loads(calls['request']['messages'][1]['content'])
+    assert sent['parameters']['requirements'] == original['parameters']['requirements']
+    assert sent['sections'] == original['sections'] and sent['instructions'] == instructions
+    assert {item['id']: item['body'] for item in result['sections']} == sections
+    assert result['origin'] == 'ai' and snapshot == original
+
+
+def test_input_boundary_includes_system_and_rejects_overflow_before_request(monkeypatch):
+    calls = mock_client(monkeypatch)
+    system = '系统提示'
+    overhead = len(json.dumps({'facts': ''}, ensure_ascii=False)) + len(system)
+    payload = {'facts': '资' * (MAX_INPUT_CHARS - overhead)}
+    Client.complete_json(None, system, payload)
+    assert len(calls['request']['messages'][1]['content']) + len(system) == MAX_INPUT_CHARS
+    calls.pop('request')
+    with pytest.raises(ApiError) as error:
+        Client.complete_json(None, system, {'facts': payload['facts'] + '超'})
+    assert error.value.code == 1001 and 'request' not in calls
+
+
+@pytest.mark.parametrize('overflow', [False, True])
+def test_response_size_boundary_is_not_silently_truncated(monkeypatch, overflow):
+    content = '{"sections":{}}'
+    content += ' ' * (MAX_RESPONSE_CHARS - len(content) + int(overflow))
+    mock_client(monkeypatch, text=content)
+    if overflow:
+        with pytest.raises(ApiError) as error:
+            Client.complete_json(None, '系统要求', {})
+        assert error.value.code == 1402
+    else:
+        assert Client.complete_json(None, '系统要求', {})[0] == {'sections': {}}
+
+
+def test_expanded_settings_and_instruction_boundaries():
+    settings = dict(enabled=True, base_url='https://test.invalid/v1', model='test',
+                    timeout_seconds=MAX_TIMEOUT_SECONDS, max_tokens=MAX_OUTPUT_TOKENS, temperature=0.2)
+    assert LlmSettingsUpdate(**settings).max_tokens == MAX_OUTPUT_TOKENS
+    for field in ('timeout_seconds', 'max_tokens'):
+        with pytest.raises(ValidationError):
+            LlmSettingsUpdate(**{**settings, field: settings[field] + 1})
+    with pytest.raises(ValidationError):
+        AiDraftRequest(revision=1, instructions='要' * (MAX_INSTRUCTIONS_CHARS + 1))

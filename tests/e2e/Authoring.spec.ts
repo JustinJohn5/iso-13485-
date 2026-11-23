@@ -82,6 +82,41 @@ test('移动端可切换编写、返回预筛、打开配置并退出登录', as
   await assertClean();
 });
 
+test('十万字符资料和十二万字符章节可完整保存及重新加载', async ({ page }) => {
+  const assertClean = watchPage(page);
+  await openAuthoring(page);
+  await page.getByTestId('template-market-research').click();
+  const requirements = '资'.repeat(99996) + '资料末尾';
+  const values = { company: '容量测试组织', project: '长文本容量测试', product: '测试产品', model: 'LONG-A', number: 'MR-LONG', version: 'A/0', requirements };
+  await expect(page.getByTestId('parameter-requirements')).toHaveAttribute('maxlength', '100000');
+  for (const [key, value] of Object.entries(values)) await page.getByTestId(`parameter-${key}`).fill(value);
+  const created = page.waitForResponse((response) => response.url().endsWith('/api/v1/document-drafts') && response.request().method() === 'POST');
+  await page.getByTestId('generate-draft').click();
+  const response = await created;
+  expect(response.status()).toBe(200);
+  const draft = (await response.json()).data;
+  expect(draft.snapshot.parameters.requirements).toBe(requirements);
+  await expect(page.getByTestId('section-s2')).toHaveValue(draft.snapshot.sections[1].body);
+  const body = '文'.repeat(119996) + '章节末尾';
+  await expect(page.getByTestId('section-s2')).toHaveAttribute('maxlength', '120000');
+  await page.getByTestId('section-s2').fill(body);
+  await page.getByTestId('draft-reason').fill('验证长章节完整保存');
+  const saving = page.waitForResponse((response) => response.url().endsWith(`/document-drafts/${draft.draft_uid}`) && response.request().method() === 'PATCH');
+  await page.getByTestId('save-draft').click();
+  expect((await saving).status()).toBe(200);
+  await expect(page.getByTestId('draft-revision')).toHaveText('修订 2');
+  await page.getByTestId('reload-draft').click();
+  await expect(page.getByTestId('authoring-notice')).toHaveText('已加载最新保存版本');
+  await expect(page.getByTestId('section-s2')).toHaveValue(body);
+  const stored = await page.request.get(`${process.env.E2E_API_BASE_URL}/api/v1/document-drafts/${draft.draft_uid}`);
+  expect(stored.status()).toBe(200);
+  const data = (await stored.json()).data;
+  expect(data.snapshot.parameters.requirements).toBe(requirements);
+  expect(data.snapshot.sections[1].body).toBe(body);
+  expect(data.history).toHaveLength(2);
+  await assertClean();
+});
+
 test('草稿并发与跨用户权限拒绝且不改动原记录', async ({ page, browser }) => {
   const assertClean = watchPage(page);
   await openAuthoring(page);

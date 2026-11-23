@@ -2,6 +2,7 @@
 from copy import deepcopy
 import re
 
+from App.Constants.AuthoringLimits import MAX_REQUIREMENTS_CHARS, MAX_SECTION_CHARS
 from App.Utils.Errors import ApiError
 
 COMMON_FIELDS = [
@@ -74,7 +75,7 @@ def build_snapshot(template_id: str, parameters: dict[str, str]) -> dict:
         raise ApiError(1001, '请填写模板的全部参数，且不要提交未定义字段')
     cleaned = {}
     for key, value in parameters.items():
-        limit = 8000 if key == 'requirements' else 120
+        limit = MAX_REQUIREMENTS_CHARS if key == 'requirements' else 120
         if not value.strip() or len(value) > limit or re.search(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', value):
             raise ApiError(1001, '模板参数为空、过长或包含不支持的控制字符')
         cleaned[key] = value.strip()
@@ -92,7 +93,7 @@ def edit_sections(snapshot: dict, changes: dict[str, str]) -> dict:
         if section['id'] not in changes:
             continue
         body = changes[section['id']].strip()
-        if not body or len(body) > 12000 or re.search(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', body):
+        if not body or len(body) > MAX_SECTION_CHARS or re.search(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', body):
             raise ApiError(1001, '章节内容为空、过长或包含不支持的控制字符')
         section['body'] = body
     result['origin'] = 'manual'

@@ -43,6 +43,9 @@ macOS / Ubuntu：
 
 ## 目录及覆盖范围
 
+- 长文本回归：`test_TemplateLibrary.py` 覆盖10万字符资料、12万字符章节及 Word 完整导出；`test_AiDraft.py` 覆盖长模型输入输出、系统提示计入100万字符总限制、响应边界及超限不截断。模型成功响应仍使用模拟客户端，不代表真实服务已经连通。
+- `tests/e2e/Authoring.spec.ts` 验证长资料与章节在浏览器、API、MySQL 保存及重载后完整一致；`LlmSettings.spec.ts` 验证65,536 token及600秒配置持久化，以及长要求发起失败调用后原草稿保留。所有写入均在测试副本并随测试清理。
+
 - `tests/Services/test_DraftBatch.py` 与 `tests/e2e/DraftBatch.spec.ts`：批量计划、共享字段边界、预览不写入、跨文件参数更新、各编号保留、旧版保留与任一过期时整体拒绝。
 
 - `tests/Services/test_AuditQuestions.py`：问题分类、去重、原文证据、旧版排除、已确认冲突仍提示、实际 Word 记录字段。
