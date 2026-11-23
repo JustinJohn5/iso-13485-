@@ -11,6 +11,7 @@ export class LlmSettingsPage {
   constructor(private root: HTMLElement, private back: () => void) {}
 
   async open(): Promise<void> {
+    window.scrollTo(0, 0);
     this.busy = true; this.render();
     try { this.config = await llmApi.config(); }
     catch (error) { this.failed = true; this.message = error instanceof Error ? error.message : '配置读取失败'; }

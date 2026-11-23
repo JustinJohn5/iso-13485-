@@ -25,6 +25,7 @@ export class AuthoringWorkspace {
   constructor(private root: HTMLElement, private back: () => void, private isAdmin = false) {}
 
   async open(): Promise<void> {
+    window.scrollTo(0, 0);
     this.render();
     await this.run(async () => {
       [this.templates, this.drafts] = await Promise.all([authoringApi.templates(), authoringApi.drafts()]);

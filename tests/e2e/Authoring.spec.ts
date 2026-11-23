@@ -53,6 +53,7 @@ test('检索、生成、参数联动、修订与历史 Word 下载', async ({ pa
   const data = (await stored.json()).data;
   expect(data.history).toHaveLength(3);
   expect(data.snapshot.parameters.model).toBe('MODEL-B');
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: '.local/AuthoringDesktop.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByTestId('save-draft')).toBeVisible();
@@ -60,6 +61,24 @@ test('检索、生成、参数联动、修订与历史 Word 下载', async ({ pa
   await page.screenshot({ path: '.local/AuthoringMobile.png', fullPage: true });
   const check = spawnSync(process.env.E2E_PYTHON!, ['tests/Helpers/E2eDatabase.py', '--draft', draft.draft_uid, '3'], { encoding: 'utf8', env: process.env });
   expect(check.status, check.stdout + check.stderr).toBe(0);
+  await assertClean();
+});
+
+test('移动端可切换编写、返回预筛、打开配置并退出登录', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const assertClean = watchPage(page);
+  await login(page);
+  await expect(page.getByTestId('templates-nav')).toBeVisible();
+  await page.getByTestId('templates-nav').click();
+  await expect(page.getByTestId('template-market-research')).toBeVisible();
+  await page.getByTestId('precheck-nav').click();
+  await expect(page.getByTestId('upload-dropzone')).toBeVisible();
+  await page.getByTestId('llm-settings-nav').click();
+  await expect(page.getByTestId('llm-key-status')).toBeVisible();
+  await expect(page.getByTestId('settings-back')).toBeVisible();
+  await page.getByTestId('settings-back').click();
+  await page.getByTestId('logout').click();
+  await expect(page.getByTestId('login-form')).toBeVisible();
   await assertClean();
 });
 
