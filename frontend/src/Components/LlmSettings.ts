@@ -36,6 +36,7 @@ export class LlmSettingsPage {
               <label>最大输出 token（256～${AUTHORING_LIMITS.outputTokens}）<input type="number" required min="256" max="${AUTHORING_LIMITS.outputTokens}" id="llm-tokens" data-testid="llm-tokens" value="${config.max_tokens}"></label>
               <label>温度（0～2）<input type="number" required min="0" max="2" step="0.01" id="llm-temperature" data-testid="llm-temperature" value="${config.temperature}"></label></div>
             <p class="control-note" data-testid="llm-key-status">密钥状态：${config.api_key_configured ? '已配置' : '未配置'}</p>
+            <p class="control-note" data-testid="llm-model-note">模型标识必须填写服务商提供的真实 API 模型 ID，不能填写自定义名称；相同服务商的不同模型也可能有不同参数限制。</p>
             <p class="control-note" data-testid="llm-capacity-note">应用接受最多100万字符的总输入；字符数不等同于 token。实际输入与输出合计受所选模型上下文窗口约束，最大输出还受服务商限制，请按模型能力设置。</p>
             <button class="button button-primary" type="submit" data-testid="save-llm-settings">${this.busy ? '正在保存…' : '保存配置'}</button>
             <p class="control-note">最多重试1次；服务不可用时保留原草稿。保存配置仅校验字段，不代表已经连通服务；可在草稿中发起 AI 编写验证。</p>

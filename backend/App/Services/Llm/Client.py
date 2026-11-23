@@ -7,6 +7,7 @@ from openai import APIError, OpenAI
 
 from App.Constants.AuthoringLimits import MAX_INPUT_CHARS, MAX_RESPONSE_CHARS
 from App.Dao.LlmConfigDao import LlmConfigDao
+from App.Services.Llm.Failure import failure, provider_failure
 from App.Utils.Crypto import decrypt_secret
 from App.Utils.Errors import ApiError
 
@@ -34,21 +35,42 @@ def complete_json(db, system: str, payload: dict) -> tuple[dict, str]:
                 max_tokens=config.max_tokens,
                 temperature=float(config.temperature),
             )
-        if not response.choices or response.choices[0].finish_reason != 'stop':
-            raise ValueError('模型输出不完整')
+        if not response.choices:
+            raise failure('output_empty')
+        finish = response.choices[0].finish_reason
+        if finish == 'length':
+            raise failure('output_truncated')
+        if finish == 'content_filter':
+            raise failure('output_filtered')
+        if finish != 'stop':
+            raise failure('output_incomplete')
         text = response.choices[0].message.content or ''
+        if not isinstance(text, str):
+            raise failure('output_structure')
+        if not text.strip():
+            raise failure('output_empty')
         if len(text) > MAX_RESPONSE_CHARS:
-            raise ValueError('模型输出过长')
+            raise failure('output_too_long')
         if text.strip().startswith('```'):
             text = '\n'.join(text.strip().splitlines()[1:-1])
-        result = json.loads(text)
+        try:
+            result = json.loads(text)
+        except ValueError:
+            raise failure('output_json') from None
         if not isinstance(result, dict):
-            raise ValueError('模型未返回 JSON 对象')
+            raise failure('output_json')
         logger.info('大模型调用成功 model=%s latency_ms=%s tokens=%s', config.model,
                     int((monotonic() - started) * 1000), response.usage.total_tokens if response.usage else 0)
         return result, config.model
-    except (APIError, ValueError, TypeError, IndexError, AttributeError) as exc:
+    except (APIError, ApiError, ValueError, TypeError, IndexError, AttributeError) as exc:
+        if isinstance(exc, ApiError):
+            error = exc
+        elif isinstance(exc, APIError):
+            error = provider_failure(exc)
+        else:
+            error = failure('output_structure')
         # 异常文本可能来自服务商且含请求内容，不记录原始异常、URL、密钥或正文。
-        logger.warning('大模型调用失败 model=%s latency_ms=%s error_type=%s', config.model,
-                       int((monotonic() - started) * 1000), type(exc).__name__)
-        raise ApiError(1402, 'AI 编写失败或输出格式异常，原草稿已保留，可继续人工编写或稍后重试') from None
+        logger.warning('大模型调用失败 model=%s latency_ms=%s error_type=%s reason=%s provider_status=%s', config.model,
+                       int((monotonic() - started) * 1000), type(exc).__name__,
+                       error.data['reason'], error.data.get('provider_status', '-'))
+        raise error from None
