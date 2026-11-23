@@ -29,7 +29,7 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title="ISO 13485 文件预筛平台", version="1.1.0", lifespan=lifespan)
+app = FastAPI(title="ISO 13485 文件预筛平台", version="1.2.4", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_settings().cors_origin_list,
