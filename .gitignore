@@ -1,0 +1,58 @@
+# ---------- 环境与密钥（严禁提交）----------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+secrets/
+config.local.*
+
+# ---------- 本地运行时目录 ----------
+.local/
+Storage/
+Logs/
+logs/
+*.log
+*.pid
+.cnf
+
+# ---------- Python ----------
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+htmlcov/
+.coverage
+
+# ---------- Node / 前端 ----------
+node_modules/
+dist/
+dist-ssr/
+.vite/
+*.local
+*.tsbuildinfo
+pnpm-debug.log*
+npm-debug.log*
+yarn-error.log*
+
+# ---------- 测试与 E2E 产物 ----------
+playwright-report/
+test-results/
+blob-report/
+playwright/.cache/
+
+# ---------- IDE 与系统 ----------
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---------- 上传与导出 ----------
+uploads/
+exports/

@@ -1,0 +1,13 @@
+{
+  "name": "iso13485-web-e2e",
+  "private": true,
+  "engines": {
+    "node": ">=26.13.1 <27"
+  },
+  "scripts": {
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.51.0"
+  }
+}

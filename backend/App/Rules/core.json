@@ -1,0 +1,34 @@
+{
+  "rule_set_id": "iso13485-core",
+  "version": "1.0.0",
+  "title": "ISO 13485 文件基础预筛规则",
+  "standard": "ISO 13485:2016",
+  "description": "用于质量体系文件文本的基础预筛查。规则不覆盖标准全部要求，也不替代专业审核。",
+  "document_types": [
+    {"type": "quality_manual", "label": "质量手册", "clauses": ["4.2"], "keywords": ["质量手册", "quality manual"]},
+    {"type": "procedure", "label": "程序文件", "clauses": ["4.2", "4.1"], "keywords": ["程序", "procedure", "sop"]},
+    {"type": "management_review", "label": "管理评审", "clauses": ["5.6"], "keywords": ["管理评审", "management review"]},
+    {"type": "internal_audit", "label": "内部审核", "clauses": ["8.2"], "keywords": ["内部审核", "internal audit"]},
+    {"type": "risk_management", "label": "风险管理", "clauses": ["7.1"], "keywords": ["风险管理", "risk management"]},
+    {"type": "design_control", "label": "设计开发", "clauses": ["7.3"], "keywords": ["设计开发", "design and development"]},
+    {"type": "purchasing", "label": "采购控制", "clauses": ["7.4"], "keywords": ["采购", "supplier", "供应商"]},
+    {"type": "nonconformity", "label": "不合格品控制", "clauses": ["8.3"], "keywords": ["不合格品", "nonconforming"]},
+    {"type": "other", "label": "其他体系文件", "clauses": [], "keywords": []}
+  ],
+  "severities": {
+    "critical": {"label": "严重", "weight": 10, "score_cap": 45},
+    "major": {"label": "主要", "weight": 5, "score_cap": 75},
+    "minor": {"label": "一般", "weight": 2},
+    "observation": {"label": "观察", "weight": 1}
+  },
+  "rules": [
+    {"rule_id": "DOC-001", "title": "文件应有可识别的编号", "clause": "4.2.4", "clause_title": "文件控制", "severity": "major", "document_types": ["*"], "check": {"type": "present", "patterns": ["(?:文件|文档|document)\\s*(?:编号|号|no\\.?|number)\\s*[:：#-]?\\s*[A-Za-z0-9._/-]{2,}"]}, "rationale": "确认文件标识信息是否出现在可抽取文本中。", "suggestion": "核对受控文件编号是否清晰且与文件清单一致。"},
+    {"rule_id": "DOC-002", "title": "文件应包含版本或修订标识", "clause": "4.2.4", "clause_title": "文件控制", "severity": "major", "document_types": ["*"], "check": {"type": "present", "patterns": ["(?:版本|修订|revision|version)\\s*(?:号|编号|等级|level)?\\s*[:：#-]?\\s*[A-Za-z0-9._/-]+"]}, "rationale": "检查文件修订状态是否可识别。", "suggestion": "补充当前版本/修订号，并核对更改历史。"},
+    {"rule_id": "DOC-003", "title": "文件应体现批准或授权信息", "clause": "4.2.4", "clause_title": "文件控制", "severity": "major", "document_types": ["*"], "check": {"type": "present", "patterns": ["批准|核准|审批|approved by|approval"]}, "rationale": "文本中查找批准相关字段；字段存在不代表签署有效。", "suggestion": "确认批准人、批准日期及受控发布记录完整。"},
+    {"rule_id": "DOC-004", "title": "文件应有生效日期或发布日期", "clause": "4.2.4", "clause_title": "文件控制", "severity": "minor", "document_types": ["*"], "check": {"type": "present", "patterns": ["(?:生效|发布日期|实施日期|effective date|issue date)\\s*[:：]?\\s*\\d{4}[年./-]\\d{1,2}[月./-]\\d{1,2}日?"]}, "rationale": "检查可抽取文本中是否出现常见日期字段。", "suggestion": "核对生效日期与批准记录、培训安排及旧版回收记录。"},
+    {"rule_id": "QMS-001", "title": "质量手册应描述质量管理体系范围", "clause": "4.2.2", "clause_title": "质量手册", "severity": "major", "document_types": ["quality_manual"], "check": {"type": "all_terms", "terms": [["范围", "适用范围", "scope"], ["医疗器械", "medical device", "产品"]]}, "rationale": "基于关键概念进行文本提示，不判断范围声明是否充分。", "suggestion": "核对体系范围、产品类别、适用场所及不适用条款说明。"},
+    {"rule_id": "MR-001", "title": "管理评审记录应体现输入和输出", "clause": "5.6", "clause_title": "管理评审", "severity": "major", "document_types": ["management_review"], "check": {"type": "all_terms", "terms": [["输入", "input", "评审输入"], ["输出", "决定", "措施", "output"]]}, "rationale": "检查管理评审记录是否包含输入与决定/措施的文本线索。", "suggestion": "补充评审输入、评审结论、责任人和措施期限，并保留记录。"},
+    {"rule_id": "AUD-001", "title": "内部审核文件应包含审核发现及跟进", "clause": "8.2.4", "clause_title": "内部审核", "severity": "major", "document_types": ["internal_audit"], "check": {"type": "all_terms", "terms": [["审核发现", "audit findings", "不符合项"], ["纠正", "跟进", "follow-up", "措施"]]}, "rationale": "检查审核发现与后续处置相关内容是否可检索。", "suggestion": "确保审核计划、客观证据、发现、纠正措施及有效性验证形成记录。"},
+    {"rule_id": "RISK-001", "title": "风险管理文件应描述风险控制", "clause": "7.1", "clause_title": "产品实现策划", "severity": "major", "document_types": ["risk_management"], "check": {"type": "all_terms", "terms": [["风险分析", "risk analysis"], ["风险控制", "risk control"], ["剩余风险", "residual risk"]]}, "rationale": "检查风险分析、控制和剩余风险等文本线索。", "suggestion": "依据适用的风险管理过程核对危害、控制措施、剩余风险和记录之间的可追溯性。"}
+  ]
+}

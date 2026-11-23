@@ -1,0 +1,140 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ISO 13485 文件预筛平台使用手册</title><style>
+:root { color-scheme: light; font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif; color: #1b2722; background: #f2f5f3; }
+* { box-sizing: border-box; } body { margin: 0; line-height: 1.85; }
+header { position: sticky; top: 0; background: #fff; border-bottom: 1px solid #dce4df; padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; gap: 20px; z-index: 1; }
+header span { font-size: 14px; } button { border: 0; background: #245a46; color: white; padding: 9px 15px; border-radius: 5px; cursor: pointer; font: inherit; font-size: 13px; }
+.layout { max-width: 1230px; margin: auto; display: grid; grid-template-columns: 210px minmax(0,1fr); gap: 28px; padding: 32px 24px 70px; }
+nav { align-self: start; position: sticky; top: 100px; font-size: 14px; } nav a { display: block; padding: 8px 0; }
+main { max-width: 900px; padding: 38px 48px 50px; background: white; border: 1px solid #e0e6e2; border-radius: 5px; }
+h1 { font-size: 29px; line-height: 1.55; margin: 0 0 22px; color: #000; } h2 { font-size: 23px; margin-top: 36px; color: #000; scroll-margin-top: 95px; } h3 { font-size: 17px; margin: 26px 0 10px; color: #000; }
+p { font-size: 14px; margin: 10px 0; overflow-wrap: anywhere; } a { color: #245a46; text-underline-offset: 3px; }
+pre { padding: 14px 16px; background: #f4f6f5; font: 12px/1.8 Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.table-wrap { margin: 16px 0 24px; overflow: auto; } table { border-collapse: collapse; width: 100%; font-size: 13px; } th, td { border: 1px solid #d9d9d9; padding: 10px 12px; text-align: left; vertical-align: middle; } th { background: #e5edf3; color: #000; } td { overflow-wrap: anywhere; }
+.page-break { margin: 42px 0; border-top: 1px solid #e7ece9; }
+@media (max-width: 850px) { .layout { grid-template-columns: 1fr; padding: 16px; } nav { position: static; display: flex; gap: 14px; flex-wrap: wrap; } nav a { padding: 0; } main { padding: 24px; } h1 { font-size: 24px; } }
+@media print { @page { size: A4; margin: 18mm; } :root, body { background: #fff; } header, nav { display: none; } .layout { display: block; padding: 0; } main { border: 0; max-width: none; padding: 0; } p { font-size: 10pt; line-height: 1.65; } h1 { font-size: 22pt; } h2 { font-size: 16pt; } h3 { font-size: 12pt; break-after: avoid; } table { font-size: 9pt; } th, td { padding: 6px 8px; } tr, pre { break-inside: avoid; } a { color: #000; } .page-break { break-before: page; border: 0; margin: 0; } }
+</style></head><body><header><span>使用手册 · 2026年11月23日</span><button type="button" onclick="window.print()">打印或另存为 PDF</button></header><div class="layout"><nav aria-label="章节导航"><a href="#chapter-1">1 快速使用</a><a href="#chapter-2">2 启动和停止</a><a href="#chapter-3">3 上传与预筛</a><a href="#chapter-4">4 结果和规则包</a><a href="#chapter-5">5 MySQL 与端口</a><a href="#chapter-6">6 账号和维护</a><a href="#chapter-7">7 常见问题</a></nav><main><h1>ISO 13485 文件预筛平台使用手册</h1>
+<p>适用对象：本地使用人员及项目维护人员</p>
+<p>版本 1.0　编制日期 2026年11月23日</p>
+<p>本手册根据当前项目代码和本机配置编写，帮助你启动网页、上传文件、理解预筛结果，以及维护 MySQL 和服务端口。建议先完成一次文件预筛，再阅读配置与排错章节。</p>
+<h2 id="chapter-1">1 快速使用</h2>
+<p>1. 在浏览器打开 <a href="http://127.0.0.1:5300">http://127.0.0.1:5300</a> 。若不能打开，按第 2 章启动服务。</p>
+<p>2. 输入管理员邮箱 admin@example.com 和此前单独提供的密码，点击“登录工作区”。手册不保存密码、数据库凭证或服务端密钥。</p>
+<p>3. 点击“浏览文件”或拖入文件，为每份文件选择正确的文件类型。</p>
+<p>4. 点击“开始预筛”，等待显示“预筛完成”，查看得分、待核实项、文本证据和建议。</p>
+<p>5. 对照原始文件人工复核；再次检查可点击“新建预筛”。使用结束后点击“退出登录”。</p>
+<h3>本机信息</h3>
+<div class="table-wrap"><table><thead><tr><th scope="col">项目</th><th scope="col">当前值</th></tr></thead><tbody><tr><td>项目目录</td><td>D:/iso</td></tr><tr><td>网页地址</td><td>http://127.0.0.1:5300</td></tr><tr><td>后端地址</td><td>http://127.0.0.1:8300</td></tr><tr><td>MySQL 地址</td><td>127.0.0.1:3306</td></tr><tr><td>开发数据库</td><td>iso13485</td></tr><tr><td>独立测试数据库</td><td>iso13485_codextest</td></tr><tr><td>Windows 数据库服务名</td><td>MySQL84</td></tr></tbody></table></div>
+<p>这些是本机当前配置；README 和环境示例中的 3406 是端口规划示例，不代表本机 MySQL 实际监听端口。移到另一台电脑时须按实际配置调整。</p>
+<h3>结果的使用边界</h3>
+<p>当前工具执行基础文本规则，不覆盖 ISO 13485 全部要求。文本命中不证明批准真实、记录完整或过程有效；任何得分均不构成认证、正式审核结论或法规符合性声明。</p>
+<h3>阅读导航</h3>
+<p>第 2 章：启动与停止；第 3 章：上传操作；第 4 章：结果与规则包；第 5 章：MySQL 和端口；第 6 章：维护；第 7 章：常见问题。</p>
+<div class="page-break"></div>
+<h2 id="chapter-2">2 启动和停止服务</h2>
+<p>已安装依赖的本机按以下顺序启动：MySQL、后端、前端。保持前后端终端窗口打开。已能访问网页时，不必重复启动，也无需再次初始化数据库。</p>
+<h3>Windows PowerShell</h3>
+<p>检查 MySQL；仅在服务停止时启动，启动服务可能需要管理员终端：</p>
+<pre aria-label="powershell"><code>Get-Service MySQL84
+Start-Service MySQL84</code></pre>
+<p>在第一个终端启动后端，使用项目已有的 Python 3.12.10 虚拟环境：</p>
+<pre aria-label="powershell"><code>Set-Location D:/iso/backend
+./.venv/Scripts/python.exe Run.py</code></pre>
+<p>在第二个终端启动前端，沿用 Node.js 26.13.1：</p>
+<pre aria-label="powershell"><code>Set-Location D:/iso/frontend
+npm.cmd run dev</code></pre>
+<p>打开 <a href="http://127.0.0.1:5300">http://127.0.0.1:5300</a> 。后端状态地址为 <a href="http://127.0.0.1:8300/api/v1/health">http://127.0.0.1:8300/api/v1/health</a> ，正常时返回 code 为 0、status 为 ok。此接口只确认应用存活，不检查 MySQL；数据库故障应另查连接。</p>
+<h3>macOS 与 Ubuntu</h3>
+<p>将下面的 /path/to/iso 换成实际项目目录。数据库服务的启动命令取决于安装方式；Ubuntu 常见为 sudo systemctl start mysql，macOS 使用对应安装工具提供的服务命令。不要照搬 Windows 服务名。</p>
+<pre aria-label="bash"><code>cd /path/to/iso/backend
+./.venv/bin/python Run.py</code></pre>
+<p>另开终端执行：</p>
+<pre aria-label="bash"><code>cd /path/to/iso/frontend
+npm run dev</code></pre>
+<h3>停止与重新启动</h3>
+<p>前台启动的服务在各自终端按 Ctrl+C 停止，再执行原命令启动。后台服务须先按端口确认进程归属，再停止本项目进程。MySQL 可能供其他项目使用，不要随网页停止而随意关闭它。Vite 开发服务适合本地使用；Ubuntu 正式部署按 deploy.md 操作。</p>
+<div class="page-break"></div>
+<h2 id="chapter-3">3 上传文件并执行预筛</h2>
+<h3>准备文件</h3>
+<p>支持 PDF、DOCX、XLSX、TXT、MD；本机单文件上限为 40 MB，一次预筛提交 1 至 20 个不重复文件。PDF 应能选中文字；扫描件、纯图片和加密文件可能无法解析。可抽取文本少于 60 个字符时会被拒绝。</p>
+<p>旧版 DOC、XLS 需另存为 DOCX、XLSX；WPS、ET 需导出为支持格式。直接修改文件扩展名不能完成格式转换。TXT、MD 建议使用 UTF-8 编码。</p>
+<h3>实际操作</h3>
+<p>1. 登录后进入“文件预筛”，点击“浏览文件”，或把文件拖入上传区域。</p>
+<p>2. 检查文件名及大小。相同文件名且大小相同的文件会在队列中被视为重复；超过 20 份请分批操作。</p>
+<p>3. 为每份文件选择类型。默认是“其他体系文件”，系统不会自动替你选好类别。类型会影响参与判定的专用规则。</p>
+<p>4. 移除误选文件可点击对应行的“×”。确认后点击“开始预筛”，系统先逐份上传与抽取，再执行规则。</p>
+<p>5. 看到“预筛完成”后查看结果。处理失败时按错误提示调整，再操作；不要把未完成状态当作成功结果。</p>
+<h3>文件类型怎么选</h3>
+<div class="table-wrap"><table><thead><tr><th scope="col">文件内容</th><th scope="col">选择类型</th><th scope="col">当前专用规则</th></tr></thead><tbody><tr><td>体系范围与总体描述</td><td>质量手册</td><td>范围与产品相关文本</td></tr><tr><td>管理评审记录</td><td>管理评审</td><td>输入与输出</td></tr><tr><td>内部审核记录</td><td>内部审核</td><td>审核发现与跟进</td></tr><tr><td>风险管理记录</td><td>风险管理</td><td>风险分析 控制 剩余风险</td></tr><tr><td>程序 设计 采购 不合格品等</td><td>对应类型</td><td>当前仅通用文件规则</td></tr><tr><td>无法归入上述类别</td><td>其他体系文件</td><td>当前仅通用文件规则</td></tr></tbody></table></div>
+<p>质量手册、管理评审、内部审核和风险管理之外，当前类型选项尚无独立专用检查项。下拉菜单中有某种类型，不代表该领域全部要求已被覆盖。</p>
+<h3>修改后重新预筛</h3>
+<p>文件一旦显示“已解析”，再次点击“开始预筛”会复用已上传文件及其类型。若修改了文件内容或需要更换已上传文件的类型，请点击“新建预筛”，重新添加文件并选择类型后提交。</p>
+<p>“移除文件”和“新建预筛”只清空本次页面队列或结果，不会删除数据库记录及已上传原件。刷新或退出页面后，当前网页没有历史列表可重新打开结果，重要信息请先另行记录。</p>
+<div class="page-break"></div>
+<h2 id="chapter-4">4 结果和规则包说明</h2>
+<h3>如何读结果</h3>
+<p>“通过”表示在抽取文本中找到规则要求的线索；“待核实”表示未命中相应条件，需要核对原文或补充内容；“未适用”通常表示本次没有上传该专用规则适用的文档，不代表已证明标准条款可以排除。</p>
+<p>“参与规则”是实际判定项数量，多文件时同一规则可以产生多项结果。“未适用”不进入得分分母。先查看“待核实”项目，再结合文件名、条款、文本证据和建议定位原文。</p>
+<h3>当前 8 条规则</h3>
+<p>规则包文件：D:/iso/backend/App/Rules/core.json。标识为 iso13485-core，版本为 1.0.0，包内标注标准为 ISO 13485:2016。下表是项目规则摘要，不是标准原文。</p>
+<div class="table-wrap"><table><thead><tr><th scope="col">编号</th><th scope="col">适用文件</th><th scope="col">检查线索</th></tr></thead><tbody><tr><td>DOC-001</td><td>所有类型</td><td>文件编号</td></tr><tr><td>DOC-002</td><td>所有类型</td><td>版本或修订标识</td></tr><tr><td>DOC-003</td><td>所有类型</td><td>批准或授权字段</td></tr><tr><td>DOC-004</td><td>所有类型</td><td>生效或发布日期字段及日期格式</td></tr><tr><td>QMS-001</td><td>质量手册</td><td>范围及产品或医疗器械概念</td></tr><tr><td>MR-001</td><td>管理评审</td><td>评审输入与输出或措施</td></tr><tr><td>AUD-001</td><td>内部审核</td><td>审核发现与纠正或跟进</td></tr><tr><td>RISK-001</td><td>风险管理</td><td>风险分析 风险控制 剩余风险</td></tr></tbody></table></div>
+<p>前 4 条中 DOC-004 是“一般”级，其余当前规则为“主要”级。规则多以正则或词组匹配判定，不审核签名真实性、日期有效性或文件实际执行情况。DOC-004 检查字段与文本形式，不等于审核日期逻辑。</p>
+<h3>得分怎么计算</h3>
+<p>基础分为通过项权重之和除以参与项权重之和，再乘 100；当前“主要”权重 5，“一般”权重 2。有主要待核实项时，得分上限为 75。引擎还支持严重级别及 45 分上限，当前包尚未使用该级别。</p>
+<p>页面结论来自内部评分：无严重项且得分至少 90 并无主要待核实项时显示“符合”；否则得分至少 75 为“基本符合”，至少 60 为“需整改”，更低为“不符合”。这些名称只描述当前规则结果，即使 100 分也不能据此宣布体系符合标准。</p>
+<h3>在哪里查看说明</h3>
+<p>左侧“规则说明”和右侧“查看规则包说明”目前都只滚动到“使用说明”，没有独立规则明细页。完整条件需查看 core.json；修改前备份并提升规则版本，在测试环境验证后重启后端。</p>
+<div class="page-break"></div>
+<h2 id="chapter-5">5 配置 MySQL 和服务端口</h2>
+<h3>两份环境文件</h3>
+<p>后端配置：D:/iso/backend/.env。前端配置：D:/iso/frontend/.env.development。修改前先安全备份；这些文件不提交 Git。保留原有加密密钥和 JWT 密钥，不要为修改端口而重新生成它们。</p>
+<div class="table-wrap"><table><thead><tr><th scope="col">文件</th><th scope="col">字段</th><th scope="col">本机当前值或用途</th></tr></thead><tbody><tr><td>后端 .env</td><td>DATABASE_URL</td><td>MySQL 连接串</td></tr><tr><td>后端 .env</td><td>BACKEND_HOST</td><td>127.0.0.1</td></tr><tr><td>后端 .env</td><td>BACKEND_PORT</td><td>8300</td></tr><tr><td>后端 .env</td><td>FRONTEND_PORT</td><td>5300 用于配置对齐</td></tr><tr><td>后端 .env</td><td>CORS_ORIGINS</td><td>允许访问的前端来源</td></tr><tr><td>前端环境文件</td><td>FRONTEND_PORT</td><td>5300 实际网页端口</td></tr><tr><td>前端环境文件</td><td>VITE_API_BASE_URL</td><td>http://127.0.0.1:8300</td></tr></tbody></table></div>
+<h3>MySQL 连接串</h3>
+<p>以下仅为格式示例；不要直接覆盖已配置的真实密码：</p>
+<pre aria-label="text"><code>DATABASE_URL=mysql+pymysql://账号:密码@主机:端口/库名?charset=utf8mb4</code></pre>
+<p>当前主机为 127.0.0.1、端口为 3306、库名为 iso13485。密码含 @、#、: 等字符时必须 URL 编码。修改连接串只改变应用连接目标，不会创建数据库、修改 MySQL 账号或更改数据库服务端口。</p>
+<h3>使用 MySQL Workbench</h3>
+<p>打开 Workbench，新增连接，选择 Standard TCP/IP，Hostname 填 127.0.0.1，Port 填 3306，Username 填项目数据库账号 iso_user。密码使用后端 .env 中 DATABASE_URL 的密码部分；若做过 URL 编码，应还原后输入。测试连接成功后选择 iso13485。网页管理员邮箱及密码不能用于登录 MySQL。</p>
+<h3>更换端口的例子</h3>
+<p>将网页端口从 5300 改为 5310：修改前端 FRONTEND_PORT、后端 FRONTEND_PORT，并将后端 CORS_ORIGINS 中允许的网页来源端口一并改为 5310，重启前后端后访问新地址。</p>
+<p>将后端从 8300 改为 8310：修改后端 BACKEND_PORT，以及前端 VITE_API_BASE_URL 的端口，再重启前后端。更改 MySQL 监听端口需先调整数据库服务配置并重启 MySQL，再更新 DATABASE_URL；Windows 本机服务指定配置文件为 C:/Program Files/MySQL/MySQL Server 8.4/my.ini。macOS 和 Ubuntu 路径按安装方式确认。</p>
+<p>本地网页建议始终使用 127.0.0.1；不要一端用 localhost、另一端用 127.0.0.1，以免 Cookie 跨站限制影响登录。测试前后端规划使用 5400、8400，正式使用 5500、8500；测试库必须独立，不能用正式库测试。</p>
+<div class="page-break"></div>
+<h2 id="chapter-6">6 账号和数据维护</h2>
+<h3>管理员账号</h3>
+<p>本机已有管理员 admin@example.com。网页尚未提供注册、账号管理或修改密码页面。新增管理员须由可信维护人员在后端目录使用交互脚本，输入有效邮箱、显示名称和至少 8 位且含字母与数字的密码。</p>
+<p>Windows PowerShell：</p>
+<pre aria-label="powershell"><code>Set-Location D:/iso/backend
+./.venv/Scripts/python.exe CreateAdmin.py</code></pre>
+<p>macOS 与 Ubuntu 在实际 backend 目录运行：</p>
+<pre aria-label="bash"><code>./.venv/bin/python CreateAdmin.py</code></pre>
+<p>同邮箱已存在时脚本会拒绝创建，不会重置旧密码。忘记密码请交由维护人员处理，不要直接将数据库中的密码哈希替换为明文。管理员和审核员可上传及预筛；其他角色不能执行写入。</p>
+<h3>数据存在哪里</h3>
+<div class="table-wrap"><table><thead><tr><th scope="col">数据</th><th scope="col">本机位置</th></tr></thead><tbody><tr><td>用户 上传元数据 抽取文本 预筛结果</td><td>MySQL 的 iso13485 库</td></tr><tr><td>上传原件</td><td>D:/iso/backend/.local/Storage</td></tr><tr><td>后端业务日志</td><td>D:/iso/backend/.local/Logs</td></tr><tr><td>规则包</td><td>D:/iso/backend/App/Rules/core.json</td></tr><tr><td>部署配置及加密主密钥</td><td>D:/iso/backend/.env</td></tr></tbody></table></div>
+<p>备份需同时覆盖数据库、上传目录、规则包版本及安全保存的后端环境配置。数据库含抽取的文档正文；不要向无关人员发送数据库副本或环境文件。改变上传目录不会自动搬迁旧文件。</p>
+<p>数据库可用 Workbench 的 Data Export 导出结构与数据；备份期间暂停上传和预筛写入，或由维护人员使用一致性备份方式。恢复先在独立测试库验证，不直接覆盖正在使用的开发库或正式库。</p>
+<h3>初始化与版本维护</h3>
+<p>InitDb.py 只用于已确认的空开发库或测试库，创建缺失表，不会升级已有表。当前本机已初始化，不需日常重复运行。结构升级应使用经测试库验证的迁移，不通过删库重建解决问题。</p>
+<p>本机已验证虚拟环境为 Python 3.12.10，Node 为 26.13.1；当前 backend/.python-version 写的是 3.15，与虚拟环境和 README 不一致。维护时沿用现有 .venv，不按该文件盲目升级解释器；版本声明统一需单独处理。</p>
+<p>当前界面还没有模型配置、历史记录查询、报告导出或服务配置页面。MySQL 和端口需改环境文件；预筛使用规则引擎，不需要填写大模型 API Key。</p>
+<div class="page-break"></div>
+<h2 id="chapter-7">7 常见问题和排查顺序</h2>
+<h3>网页打不开</h3>
+<p>先检查地址是否为 <a href="http://127.0.0.1:5300">http://127.0.0.1:5300</a> ，再确认前端终端在运行。修改过端口要使用新地址。端口占用时先确认进程，不要直接结束陌生进程。</p>
+<p>Windows 查看监听情况：</p>
+<pre aria-label="powershell"><code>Get-NetTCPConnection -State Listen -LocalPort 5300,8300</code></pre>
+<p>macOS 查看单个端口；查询后端时将 5300 改为 8300：</p>
+<pre aria-label="bash"><code>lsof -nP -iTCP:5300 -sTCP:LISTEN</code></pre>
+<p>Ubuntu 对应查询：</p>
+<pre aria-label="bash"><code>ss -ltnp &#x27;sport = :5300&#x27;</code></pre>
+<h3>网页能打开但无法登录</h3>
+<p>先核对邮箱和密码，再检查后端是否运行。若健康接口正常，仍需检查 MySQL84 服务及 DATABASE_URL，因为健康接口不验证数据库。Access denied 通常表示 MySQL 账号、密码或匹配主机权限不正确；Connection refused 通常表示服务未监听目标地址和端口。</p>
+<p>出现“数据库业务表尚未初始化”时，先确认连接的是预期库，再让维护人员处理初始化或迁移。不要向未知数据库运行建表命令。CORS 或请求失败则核对前端 API 地址及后端 CORS_ORIGINS，修改后重启。</p>
+<h3>文件不能上传或解析</h3>
+<p>确认扩展名和真实格式一致、文件未损坏或加密，大小不超过 40 MB。文本不足时先确认 PDF 可选中文字；扫描件需在平台外完成 OCR 并导出可检索文本。超过 20 份分批提交，重复文件先从队列移除。</p>
+<h3>明明有内容却显示待核实</h3>
+<p>可能是字段在图片、页眉页脚或无法完整抽取的表格内，也可能是现有规则词组未覆盖实际表述。先核对文件类型和原文，不要为追求高分添加无实际意义的关键词。由维护人员确认后再调整规则并重新验证。</p>
+<h3>登录后刷新或退出导致结果消失</h3>
+<p>这是当前界面的限制。数据可能已保存在数据库，但网页没有历史查询或报告导出功能。操作前安排好结果记录方式，不要把“新建预筛”当作删除服务器文件的操作。</p>
+<h3>反馈问题时提供什么</h3>
+<p>提供发生时间、页面错误提示、文件格式和大小、操作步骤，以及是否修改过端口。维护人员可查后端日志及响应中的 X-Request-ID。不要发送真实密码、完整 Cookie、数据库连接串或完整 .env；涉及敏感文档时先脱敏。</p></main></div></body></html>
