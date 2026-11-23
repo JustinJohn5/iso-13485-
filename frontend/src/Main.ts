@@ -7,6 +7,7 @@ import { bindReviewEvents, renderDocumentReview, renderMetadata } from './Compon
 import type { ControlMetadata, DocumentReview, MetadataChanges } from './Types/DocumentControl';
 import { AuthoringWorkspace } from './Components/Authoring';
 import { LlmSettingsPage } from './Components/LlmSettings';
+import { bindAuditQuestions, renderAuditQuestions } from './Components/AuditQuestions';
 
 type QueueItem = { file: File; type: string; uid?: string; error?: string; detection?: TypeDetection; warnings?: string[]; metadata?: ControlMetadata; changes?: MetadataChanges };
 const root = document.querySelector<HTMLDivElement>('#app')!;
@@ -90,6 +91,7 @@ function render(): void {
               <section class="section-block action-block"><div class="action-copy"><strong>规则预筛</strong><span>逐份文件运行基础规则集，可在结果中查看证据与建议。</span></div><button id="analyze" data-testid="analyze-button" class="button button-primary" ${busy || !queue.length ? 'disabled' : ''}>${busy ? '<span class="spinner"></span> 正在处理' : '开始预筛'} <span aria-hidden="true">→</span></button></section>
               ${notice ? `<div class="inline-notice ${notice.startsWith('错误') ? 'is-error' : ''}" role="status">${escape(notice)}</div>` : ''}
               ${result ? renderResult(result) : ''}
+              ${result ? renderAuditQuestions() : ''}
             </div>
             <aside class="side-column">
               <section class="side-panel"><div class="panel-heading"><span class="panel-icon">⌁</span><div><h3>检查范围</h3><p>当前规则包覆盖的基础线索</p></div></div><div class="scope-list"><div><span>01</span><p>文件编号与修订标识</p></div><div><span>02</span><p>批准与生效日期字段</p></div><div><span>03</span><p>部分体系文件关键要素</p></div><div><span>04</span><p>条款级文本命中情况</p></div></div><button data-testid="show-rules" id="show-rules" class="panel-link">查看规则包说明 <span>→</span></button></section>
@@ -103,6 +105,7 @@ function render(): void {
 }
 
 function bindEvents(): void {
+  if (result) bindAuditQuestions(root, result);
   root.querySelector('#templates-nav')?.addEventListener('click', () => {
     if (!busy) void new AuthoringWorkspace(root, render, user?.role === 'admin').open();
   });

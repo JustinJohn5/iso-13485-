@@ -43,6 +43,9 @@ macOS / Ubuntu：
 
 ## 目录及覆盖范围
 
+- `tests/Services/test_AuditQuestions.py`：问题分类、去重、原文证据、旧版排除、已确认冲突仍提示、实际 Word 记录字段。
+- `tests/e2e/AuditQuestions.spec.ts`：预筛至内审问题清单的完整交互、引用缺项、下载及其他用户权限。
+
 - `tests/Services/test_AiDraft.py`：SDK 超时/重试配置、脱敏日志、未配置拒绝、异常 JSON 和章节合同；使用合成数据与模拟客户端，不调用真实模型。
 - `tests/e2e/LlmSettings.spec.ts`：管理员配置、API Key 密文入库且不回显、审核员越权拒绝、实际模型调用失败后保留草稿。测试结束仅在配置仍由本次账号修改时恢复原测试库配置，不触碰开发/正式配置。
 

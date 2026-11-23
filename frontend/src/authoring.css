@@ -17,6 +17,12 @@
 .authoring-fields label:last-child { grid-column: 1 / -1; }
 .draft-preview { margin-top: 30px; padding-top: 24px; border-top: 1px solid var(--line); }
 .ai-draft-panel { padding: 16px; border: 1px solid var(--line); background: #f8faf9; border-radius: 9px; }
+.audit-report { margin-top: 24px; padding: 24px; }
+.audit-summary { display: flex; flex-wrap: wrap; gap: 18px; padding: 14px; background: var(--green-pale); border-radius: 8px; font-size: 13px; }
+.audit-question { padding: 20px 0; border-bottom: 1px solid var(--line); font-size: 13px; line-height: 1.8; }
+.audit-question small { color: var(--green); }
+.audit-question h3 { margin: 5px 0; font-size: 15px; }
+.audit-question blockquote { margin: 12px 0; padding: 10px 14px; border-left: 3px solid var(--line); background: #f8faf9; white-space: pre-wrap; overflow-wrap: anywhere; }
 .section-editor { display: grid; gap: 10px; margin: 20px 0; font-size: 13px; }
 .draft-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .draft-history { margin-top: 20px; font-size: 13px; }
