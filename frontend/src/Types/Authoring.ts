@@ -1,0 +1,17 @@
+export interface Template {
+  id: string; title: string; category: string; version: string; description: string;
+  fields: Array<{ key: string; label: string; multiline?: boolean }>;
+  sections: Array<{ id: string; title: string; body: string }>;
+}
+
+export interface DraftSnapshot {
+  template_id: string; template_version: string; title: string; parameters: Record<string, string>;
+  sections: Array<{ id: string; title: string; body: string }>; origin: string; status: string;
+}
+
+export interface Draft {
+  draft_uid: string; revision: number; snapshot: DraftSnapshot;
+  history: Array<{ revision: number; user_id: number; reason: string; created_at: string }>;
+}
+
+export interface DraftSummary { draft_uid: string; revision: number; title: string; project: string }

@@ -43,6 +43,9 @@ macOS / Ubuntu：
 
 ## 目录及覆盖范围
 
+- `tests/Services/test_TemplateLibrary.py`：模板检索、输入边界、参数联动、历史隔离及真实 Word 内容。
+- `tests/e2e/Authoring.spec.ts`：检索、生成、编辑、参数更新、历史下载、乐观锁和跨用户访问；草稿数据保存在独立 MySQL 测试库，结束后随本次测试用户清理。
+
 - `tests/Services/`：文件安全校验、自动类型识别、手动覆盖、歧义与未知类型、规则证据及日期文本。
 - `tests/Services/test_DocumentReview.py`：版本建议与人工选择、状态日期限制、记录实例、编号引用、保存期限及快照变化。
 - `tests/e2e/Helpers.ts`：登录、上传样本、网络与浏览器错误监测、数据库断言。

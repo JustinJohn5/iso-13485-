@@ -37,6 +37,7 @@ def main() -> int:
     from App.Models.ValidationRun import ValidationRun
     from App.Models.DocumentReview import DocumentReview
     from App.Models.AuditLog import AuditLog
+    from App.Models.DocumentDraft import DocumentDraft
     from App.Utils.Security import hash_password
 
     settings = get_settings()
@@ -55,6 +56,8 @@ def main() -> int:
             raise SystemExit('测试数据库必须为 MySQL 8.4')
     from MigrateDocumentReviews import migrate
     migrate()
+    from MigrateDocumentDrafts import migrate as migrate_drafts
+    migrate_drafts()
 
     node = shutil.which('node')
     if not node:
@@ -114,6 +117,7 @@ def main() -> int:
             db.execute(delete(ValidationDocument).where(ValidationDocument.run_id.in_(run_ids)))
             db.execute(delete(ValidationRun).where(ValidationRun.created_by.in_(user_ids)))
             db.execute(delete(DocumentReview).where(DocumentReview.created_by.in_(user_ids)))
+            db.execute(delete(DocumentDraft).where(DocumentDraft.created_by.in_(user_ids)))
             db.execute(delete(AuditLog).where(AuditLog.user_id.in_(user_ids)))
             names = db.execute(select(UploadedFile.stored_name).where(UploadedFile.uploaded_by.in_(user_ids))).scalars().all()
             db.execute(delete(UploadedFile).where(UploadedFile.uploaded_by.in_(user_ids)))

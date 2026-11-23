@@ -74,7 +74,7 @@ export interface ValidationResult {
 
 const apiBase = import.meta.env.VITE_API_BASE_URL;
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (!apiBase) throw new Error('缺少前端配置 VITE_API_BASE_URL');
   const response = await fetch(`${apiBase}${path}`, {
     ...init,
@@ -84,6 +84,19 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const envelope = (await response.json()) as ApiEnvelope<T>;
   if (!response.ok || envelope.code !== 0) throw new Error(envelope.message || '请求失败');
   return envelope.data;
+}
+
+export async function download(path: string, filename: string): Promise<void> {
+  if (!apiBase) throw new Error('缺少前端配置 VITE_API_BASE_URL');
+  const response = await fetch(`${apiBase}${path}`, { credentials: 'include' });
+  if (!response.ok) {
+    const body = await response.json();
+    throw new Error(body.message || '下载失败');
+  }
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement('a');
+  link.href = url; link.download = filename; link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export const api = {
