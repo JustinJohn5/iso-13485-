@@ -1,9 +1,12 @@
 import './style.css';
+import './document-control.css';
 import { api, type DocumentType, type TypeDetection, type User, type ValidationResult } from './Api';
 import { renderResult } from './Components/Results';
 import { escape } from './Utils/Html';
+import { bindReviewEvents, renderDocumentReview, renderMetadata } from './Components/DocumentReview';
+import type { ControlMetadata, DocumentReview, MetadataChanges } from './Types/DocumentControl';
 
-type QueueItem = { file: File; type: string; uid?: string; error?: string; detection?: TypeDetection; warnings?: string[] };
+type QueueItem = { file: File; type: string; uid?: string; error?: string; detection?: TypeDetection; warnings?: string[]; metadata?: ControlMetadata; changes?: MetadataChanges };
 const root = document.querySelector<HTMLDivElement>('#app')!;
 let user: User | null = null;
 let types: DocumentType[] = [];
@@ -11,6 +14,8 @@ let queue: QueueItem[] = [];
 let result: ValidationResult | null = null;
 let busy = false;
 let notice = '';
+let documentReview: DocumentReview | null = null;
+let asOfDate = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 
 function renderLogin(message = ''): void {
   root.innerHTML = `
@@ -55,7 +60,7 @@ function render(): void {
       <div class="file-name"><strong title="${escape(item.file.name)}">${escape(item.file.name)}</strong><small>${formatSize(item.file.size)}${item.uid ? ' · 已解析' : ''}</small>${item.detection ? `<small data-testid="file-detection-${index}">${item.type === 'auto' ? `自动识别：${escape(item.detection.label)} · ${escape(item.detection.reason)}` : `手动选择：${escape(types.find((type) => type.type === item.type)?.label || item.type)}`}</small>` : ''}${item.warnings?.length ? `<small>${escape(item.warnings.join('；'))}</small>` : ''}${item.error ? `<small class="form-error">${escape(item.error)}</small>` : ''}</div>
       <select ${busy ? 'disabled' : ''} aria-label="${escape(item.file.name)} 文件类型" data-testid="document-type-${index}" data-type-index="${index}">${options.replace(`value="${escape(item.type)}"`, `value="${escape(item.type)}" selected`)}</select>
       <button ${busy ? 'disabled' : ''} data-testid="remove-file-${index}" class="icon-button remove-file" data-remove="${index}" aria-label="移除 ${escape(item.file.name)}" title="移除文件">×</button>
-    </div>`).join('') : '<div class="empty-queue">选择文件后将在这里显示解析队列</div>';
+    </div>${item.metadata ? renderMetadata(item.metadata, index, busy) : ''}`).join('') : '<div class="empty-queue">选择文件后将在这里显示解析队列</div>';
   root.innerHTML = `
     <div class="app-shell">
       <aside class="sidebar">
@@ -77,6 +82,7 @@ function render(): void {
                 <div id="dropzone" class="dropzone" data-testid="upload-dropzone"><input id="file-input" data-testid="upload-files" type="file" multiple accept=".pdf,.docx,.xlsx,.txt,.md" ${busy ? 'disabled' : ''} hidden><div class="upload-symbol">↑</div><strong>拖放文件到此处，或 <button ${busy ? 'disabled' : ''} id="browse" data-testid="browse-files" class="text-button" type="button">浏览文件</button></strong><span>添加后自动上传并识别类型，可手动修正；每次最多 20 份文件</span></div>
                 <div class="file-list">${queued}</div>
               </section>
+              ${renderDocumentReview(documentReview, asOfDate, busy, queue.length > 0)}
               <section class="section-block action-block"><div class="action-copy"><strong>规则预筛</strong><span>逐份文件运行基础规则集，可在结果中查看证据与建议。</span></div><button id="analyze" data-testid="analyze-button" class="button button-primary" ${busy || !queue.length ? 'disabled' : ''}>${busy ? '<span class="spinner"></span> 正在处理' : '开始预筛'} <span aria-hidden="true">→</span></button></section>
               ${notice ? `<div class="inline-notice ${notice.startsWith('错误') ? 'is-error' : ''}" role="status">${escape(notice)}</div>` : ''}
               ${result ? renderResult(result) : ''}
@@ -106,11 +112,12 @@ function bindEvents(): void {
   root.querySelectorAll<HTMLSelectElement>('[data-type-index]').forEach((select) => select.addEventListener('change', async () => {
     const item = queue[Number(select.dataset.typeIndex)];
     const previous = item.type;
-    item.type = select.value; result = null; notice = ''; busy = true; render();
+    item.type = select.value; result = null; documentReview = null; notice = ''; busy = true; render();
     try {
       if (item.uid) {
         const updated = await api.updateType(item.uid, item.type);
         item.detection = updated.type_detection;
+        item.metadata = updated.control_metadata; item.changes = {};
       } else await prepareFiles();
     } catch (error) {
       item.type = previous;
@@ -118,17 +125,22 @@ function bindEvents(): void {
     } finally { busy = false; render(); }
   }));
   root.querySelectorAll<HTMLButtonElement>('[data-remove]').forEach((button) => button.addEventListener('click', () => {
-    queue.splice(Number(button.dataset.remove), 1); result = null; notice = ''; render();
+    queue.splice(Number(button.dataset.remove), 1); result = null; documentReview = null; notice = ''; render();
   }));
   root.querySelector<HTMLButtonElement>('#analyze')?.addEventListener('click', analyze);
   root.querySelector<HTMLButtonElement>('#logout')?.addEventListener('click', async () => {
-    await api.logout().catch(() => undefined); user = null; queue = []; result = null; renderLogin();
+    await api.logout().catch(() => undefined); user = null; queue = []; result = null; documentReview = null; renderLogin();
   });
   root.querySelectorAll<HTMLButtonElement>('#show-rules, #rules-nav').forEach((button) => button.addEventListener('click', () => {
     document.querySelector('#rule-note')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }));
   root.querySelector('#notice-link')?.addEventListener('click', () => document.querySelector('#rule-note')?.scrollIntoView({ behavior: 'smooth' }));
-  root.querySelector('#reset-result')?.addEventListener('click', () => { queue = []; result = null; notice = ''; render(); });
+  root.querySelector('#reset-result')?.addEventListener('click', () => { queue = []; result = null; documentReview = null; notice = ''; render(); });
+  bindReviewEvents(root, (index, field, value) => {
+    const item = queue[index]; if (!item.metadata || busy) return;
+    item.metadata[field] = value; item.changes = { ...item.changes, [field]: value };
+    documentReview = null; result = null; notice = '文件控制信息已校正，请重新检查关联与版本'; render();
+  }, (value) => { asOfDate = value; documentReview = null; result = null; render(); }, checkRelations, confirmDecision);
 }
 
 async function addFiles(files: File[]): Promise<void> {
@@ -140,7 +152,7 @@ async function addFiles(files: File[]): Promise<void> {
     queue.push({ file, type: 'auto' });
   }
   notice = rejected ? '部分文件格式不支持、已在队列中或超出 20 份限制' : '';
-  result = null; busy = true; render();
+  result = null; documentReview = null; busy = true; render();
   try { await prepareFiles(); } finally { busy = false; render(); }
 }
 
@@ -152,6 +164,7 @@ async function prepareFiles(): Promise<void> {
       item.uid = uploaded.file_uid;
       item.detection = uploaded.type_detection;
       item.warnings = uploaded.warnings;
+      item.metadata = uploaded.control_metadata; item.changes = {};
       item.error = undefined;
     } catch (error) {
       item.error = error instanceof Error ? error.message : '上传失败，请重试';
@@ -165,7 +178,9 @@ async function analyze(): Promise<void> {
   try {
     await prepareFiles();
     if (queue.some((item) => !item.uid)) throw new Error('部分文件未解析成功，请修正或移除后重试');
-    result = await api.validate(queue.map((item) => item.uid!));
+    if (!documentReview) await createReview();
+    if (!documentReview!.ready) { notice = '已发现文件冲突，请在“关联文件与正式版本”中选择依据并确认后再预筛'; return; }
+    result = await api.validate(queue.map((item) => item.uid!), documentReview!.review_uid, documentReview!.revision);
     notice = '预筛完成，请结合文件原文复核各项线索。';
   } catch (error) {
     notice = `错误：${error instanceof Error ? error.message : '处理失败'}`;
@@ -173,6 +188,33 @@ async function analyze(): Promise<void> {
     busy = false; render();
     if (result) document.querySelector('#result')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
+}
+
+async function createReview(): Promise<void> {
+  const overrides = Object.fromEntries(queue.filter((item) => item.uid && item.changes && Object.keys(item.changes).length).map((item) => [item.uid!, item.changes!]));
+  documentReview = await api.createReview(queue.map((item) => item.uid!), asOfDate, overrides);
+}
+
+async function checkRelations(): Promise<void> {
+  if (busy) return;
+  busy = true; result = null; notice = ''; render();
+  try {
+    await prepareFiles();
+    if (queue.some((item) => !item.uid)) throw new Error('部分文件未解析成功，请先处理');
+    await createReview();
+    notice = '关联与版本检查完成，请核对文件依据及补件提示';
+  } catch (error) { notice = `错误：${error instanceof Error ? error.message : '关联检查失败'}`; }
+  finally { busy = false; render(); }
+}
+
+async function confirmDecision(kind: 'version' | 'requirement', id: string, uid: string, reason: string): Promise<void> {
+  if (busy || !documentReview) return;
+  busy = true; result = null; notice = ''; render();
+  try {
+    documentReview = await api.confirmReview(documentReview, kind, id, uid, reason);
+    notice = '确认依据已保存，原文件和确认历史均保留';
+  } catch (error) { notice = `错误：${error instanceof Error ? error.message : '确认失败'}`; }
+  finally { busy = false; render(); }
 }
 
 async function loadWorkspace(): Promise<void> {

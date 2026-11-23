@@ -52,6 +52,11 @@ export function currentRunCount(): number {
   return Number(result.stdout.trim());
 }
 
+export function verifyReviewSnapshot(runUid: string, selectedUid: string, excludedUid: string) {
+  const result = spawnSync(process.env.E2E_PYTHON!, [resolve('tests/Helpers/E2eDatabase.py'), '--review', runUid, selectedUid, excludedUid], { encoding: 'utf-8', env: process.env });
+  expect(result.status, result.stdout + result.stderr).toBe(0);
+}
+
 export async function analyze(page: Page) {
   await expect(page.getByTestId('analyze-button')).toBeEnabled();
   const response = page.waitForResponse((item) => item.url().endsWith('/api/v1/validations') && item.request().method() === 'POST');

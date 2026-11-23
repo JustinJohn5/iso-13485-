@@ -1,0 +1,18 @@
+.control-metadata { margin: 0 0 12px; padding: 10px 14px; border: 1px solid #dce5df; border-radius: 6px; background: #f7faf8; }
+.control-metadata summary, .reference-list summary { cursor: pointer; font-size: 12px; line-height: 1.8; }
+.control-metadata small, .reference-list small { display: block; margin-top: 7px; color: #67756e; overflow-wrap: anywhere; line-height: 1.7; }
+.metadata-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.metadata-grid label, .decision-form label, .review-actions label { display: grid; gap: 5px; font-size: 12px; color: #52635a; }
+.metadata-grid input, .metadata-grid select, .decision-form input, .decision-form select, .review-actions input { width: 100%; min-width: 0; border: 1px solid #d6dfd9; border-radius: 5px; padding: 9px; background: white; color: #223e30; font: inherit; }
+.control-note { font-size: 12px; color: #66746d; line-height: 1.8; margin-block: 10px; overflow-wrap: anywhere; }
+.review-actions { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
+.control-conflict { padding: 15px; margin-top: 15px; border: 1px solid #dfcd9e; border-radius: 6px; background: #fffdf7; overflow-wrap: anywhere; }
+.control-conflict h3 { font-size: 14px; margin: 0 0 10px; }
+.control-conflict p, .control-conflict li, .control-conflict blockquote { font-size: 12px; line-height: 1.8; }
+.control-conflict blockquote { margin: 10px 0; padding: 8px 12px; border-left: 3px solid #d4bd85; background: white; }
+.decision-form { display: grid; gap: 10px; margin-top: 14px; }
+.decision-form button { justify-self: start; }
+.control-confirmed { color: #287352; }
+.reference-list { margin-top: 15px; font-size: 12px; line-height: 1.8; }
+.reference-list p { border-bottom: 1px solid #e3e9e5; padding-block: 9px; overflow-wrap: anywhere; }
+@media(max-width: 560px) { .metadata-grid { grid-template-columns: minmax(0, 1fr); } .control-conflict { padding: 10px; } }

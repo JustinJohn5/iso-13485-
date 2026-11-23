@@ -1,3 +1,5 @@
+import type { ControlMetadata, DocumentReview, MetadataChanges } from './Types/DocumentControl';
+
 export interface ApiEnvelope<T> {
   code: number;
   message: string;
@@ -26,6 +28,7 @@ export interface UploadedDocument {
   page_count: number;
   warnings: string[];
   type_detection: TypeDetection;
+  control_metadata: ControlMetadata;
 }
 
 export interface TypeDetection {
@@ -64,6 +67,8 @@ export interface ValidationResult {
   findings: Finding[];
   documents: Array<{ name: string; document_type: string; type_label: string }>;
   duplicate_files: Array<{ name: string; kept_name: string }>;
+  excluded_versions: string[];
+  document_review: DocumentReview | null;
   disclaimer: string;
 }
 
@@ -95,13 +100,21 @@ export const api = {
     body.append('document_type', documentType);
     return request<UploadedDocument>('/api/v1/documents', { method: 'POST', body });
   },
-  updateType: (uid: string, documentType: string) => request<Pick<UploadedDocument, 'file_uid' | 'document_type' | 'type_detection'>>(`/api/v1/documents/${encodeURIComponent(uid)}`, {
+  updateType: (uid: string, documentType: string) => request<Pick<UploadedDocument, 'file_uid' | 'document_type' | 'type_detection' | 'control_metadata'>>(`/api/v1/documents/${encodeURIComponent(uid)}`, {
     method: 'PATCH', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ document_type: documentType }),
   }),
-  validate: (uids: string[]) => {
+  createReview: (uids: string[], asOf: string, overrides: Record<string, MetadataChanges>) => request<DocumentReview>('/api/v1/document-reviews', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file_uids: uids, as_of_date: asOf, overrides }),
+  }),
+  confirmReview: (review: DocumentReview, kind: 'version' | 'requirement', issue: string, uid: string, reason: string) => request<DocumentReview>(`/api/v1/document-reviews/${encodeURIComponent(review.review_uid)}/decisions`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ revision: review.revision, kind, issue_id: issue, file_uid: uid, reason }),
+  }),
+  validate: (uids: string[], reviewUid = '', reviewRevision?: number) => {
     const body = new FormData();
     uids.forEach((uid) => body.append('file_uids', uid));
+    if (reviewUid) body.append('review_uid', reviewUid);
+    if (reviewRevision !== undefined) body.append('review_revision', String(reviewRevision));
     return request<ValidationResult>('/api/v1/validations', { method: 'POST', body });
   },
 };

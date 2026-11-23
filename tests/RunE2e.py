@@ -35,6 +35,8 @@ def main() -> int:
     from App.Models.User import ROLE_ADMIN, User
     from App.Models.ValidationDocument import ValidationDocument
     from App.Models.ValidationRun import ValidationRun
+    from App.Models.DocumentReview import DocumentReview
+    from App.Models.AuditLog import AuditLog
     from App.Utils.Security import hash_password
 
     settings = get_settings()
@@ -51,18 +53,26 @@ def main() -> int:
         version = connection.execute(text('SELECT VERSION()')).scalar_one()
         if not version.startswith('8.4.'):
             raise SystemExit('测试数据库必须为 MySQL 8.4')
+    from MigrateDocumentReviews import migrate
+    migrate()
 
-    email = f'e2e-{secrets.token_hex(6)}@example.com'
-    password = secrets.token_urlsafe(24)
-    with session_scope() as db:
-        user = User(email=email, display_name='自动化测试账号', password_hash=hash_password(password), role=ROLE_ADMIN)
-        db.add(user)
-        db.flush()
-        user_id = user.id
-    env = {**os.environ, 'E2E_EMAIL': email, 'E2E_PASSWORD': password, 'E2E_PYTHON': sys.executable}
     node = shutil.which('node')
     if not node:
         raise SystemExit('缺少项目要求的 Node.js')
+    email = f'e2e-{secrets.token_hex(6)}@example.com'
+    password = secrets.token_urlsafe(24)
+    other_email = f'e2e-other-{secrets.token_hex(6)}@example.com'
+    other_password = secrets.token_urlsafe(24)
+    with session_scope() as db:
+        user = User(email=email, display_name='自动化测试账号', password_hash=hash_password(password), role=ROLE_ADMIN)
+        db.add(user)
+        other = User(email=other_email, display_name='隔离权限测试账号', password_hash=hash_password(other_password), role='auditor')
+        db.add(other)
+        db.flush()
+        user_id = user.id
+        user_ids = [user.id, other.id]
+    env = {**os.environ, 'E2E_EMAIL': email, 'E2E_PASSWORD': password, 'E2E_OTHER_EMAIL': other_email,
+           'E2E_OTHER_PASSWORD': other_password, 'E2E_PYTHON': sys.executable}
     processes: list[subprocess.Popen] = []
     log_dir = ROOT / '.local' / 'E2eLogs'
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -99,13 +109,15 @@ def main() -> int:
         for output in logs:
             output.close()
         with session_scope() as db:
-            run_ids = select(ValidationRun.id).where(ValidationRun.created_by == user_id)
+            run_ids = select(ValidationRun.id).where(ValidationRun.created_by.in_(user_ids))
             db.execute(delete(Finding).where(Finding.run_id.in_(run_ids)))
             db.execute(delete(ValidationDocument).where(ValidationDocument.run_id.in_(run_ids)))
-            db.execute(delete(ValidationRun).where(ValidationRun.created_by == user_id))
-            names = db.execute(select(UploadedFile.stored_name).where(UploadedFile.uploaded_by == user_id)).scalars().all()
-            db.execute(delete(UploadedFile).where(UploadedFile.uploaded_by == user_id))
-            db.execute(delete(User).where(User.id == user_id))
+            db.execute(delete(ValidationRun).where(ValidationRun.created_by.in_(user_ids)))
+            db.execute(delete(DocumentReview).where(DocumentReview.created_by.in_(user_ids)))
+            db.execute(delete(AuditLog).where(AuditLog.user_id.in_(user_ids)))
+            names = db.execute(select(UploadedFile.stored_name).where(UploadedFile.uploaded_by.in_(user_ids))).scalars().all()
+            db.execute(delete(UploadedFile).where(UploadedFile.uploaded_by.in_(user_ids)))
+            db.execute(delete(User).where(User.id.in_(user_ids)))
         for name in names:
             path = (settings.upload_dir / name).resolve()
             if path.parent == settings.upload_dir:

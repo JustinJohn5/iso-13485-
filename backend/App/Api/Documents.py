@@ -22,6 +22,8 @@ from App.Models.ValidationDocument import ValidationDocument
 from App.Models.ValidationRun import STATUS_SUCCEEDED, ValidationRun
 from App.Services.Extraction.ExtractorRegistry import extract
 from App.Services.DocumentClassifier import resolve_document_type
+from App.Services.DocumentControl.Metadata import extract_metadata
+from App.Services.DocumentControl.ReviewStore import validation_scope
 from App.Services.Rules.RuleEngine import DocumentInput, RuleEngine
 from App.Services.ScoringService import build_score
 from App.Utils.Errors import ApiError
@@ -63,7 +65,8 @@ def update_document_type(
     row.document_type = resolved
     db.commit()
     return success({"file_uid": row.file_uid, "document_type": resolved,
-                    "type_detection": detection.to_dict()}, "文件类型已更新")
+                    "type_detection": detection.to_dict(),
+                    "control_metadata": extract_metadata(row.original_name, row.extracted_text, resolved)}, "文件类型已更新")
 
 
 @router.post("/documents")
@@ -124,6 +127,7 @@ async def upload_document(
             "name": row.original_name,
             "document_type": resolved_type,
             "type_detection": detection.to_dict(),
+            "control_metadata": extract_metadata(original_name, extracted.text, resolved_type),
             "size_bytes": row.size_bytes,
             "char_count": row.char_count,
             "page_count": row.page_count,
@@ -140,6 +144,8 @@ async def upload_document(
 @router.post("/validations")
 def validate_documents(
     file_uids: list[str] = Form(...),
+    review_uid: str = Form(''),
+    review_revision: int | None = Form(None),
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
@@ -152,6 +158,9 @@ def validate_documents(
         raise ApiError(1203)
     if user.role != "admin" and any(row.uploaded_by != user.id for row in files):
         raise ApiError(1104)
+    selected_uids, review_snapshot = validation_scope(db, user, [by_uid[uid] for uid in file_uids], review_uid, review_revision)
+    excluded_versions = [by_uid[uid].original_name for uid in file_uids if uid not in selected_uids]
+    file_uids = selected_uids
     rule_set = rule_loader().get()
     # 一次批量查询后在内存中按内容摘要去重，避免重复文件重复计分。
     unique_uids: list[str] = []
@@ -181,7 +190,7 @@ def validate_documents(
         for uid in file_uids
     ]
     evaluations = RuleEngine(rule_set).evaluate(inputs)
-    score = build_score(rule_set, evaluations)
+    score = build_score(rule_set, evaluations, document_conflicts=bool(review_snapshot and review_snapshot['requirement_conflicts']))
     timestamp = now()
     run = ValidationRun(
         run_uid=str(uuid4()), rule_set_id=rule_set.rule_set_id,
@@ -191,6 +200,7 @@ def validate_documents(
         critical_count=score.critical_count, major_count=score.major_count,
         minor_count=score.minor_count, observation_count=score.observation_count,
         total_count=score.total_count, created_by=user.id, started_at=timestamp, finished_at=timestamp,
+        review_snapshot=review_snapshot,
     )
     ValidationDao.create_run(db, run)
     ValidationDao.add_documents(db, [
@@ -215,6 +225,8 @@ def validate_documents(
         "rule_set": {"title": rule_set.title, "standard": rule_set.standard, "version": rule_set.version},
         "score": score.to_dict(),
         "duplicate_files": duplicates,
+        "excluded_versions": excluded_versions,
+        "document_review": review_snapshot,
         "documents": [{"name": item.name, "document_type": item.document_type,
                        "type_label": rule_set.document_type_label(item.document_type)} for item in inputs],
         "findings": [

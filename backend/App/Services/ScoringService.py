@@ -97,7 +97,7 @@ def _severity_def(rule_set: RuleSet, severity: str) -> SeverityDef:
     )
 
 
-def build_score(rule_set: RuleSet, evaluations: list[RuleEvaluation]) -> ScoreResult:
+def build_score(rule_set: RuleSet, evaluations: list[RuleEvaluation], *, document_conflicts: bool = False) -> ScoreResult:
     """按严重程度加权计算得分，并对严重不符合设置得分上限。"""
     applicable = [item for item in evaluations if item.status != STATUS_SKIPPED]
     passed = [item for item in applicable if item.status == STATUS_PASS]
@@ -128,6 +128,8 @@ def build_score(rule_set: RuleSet, evaluations: list[RuleEvaluation]) -> ScoreRe
     score = round(max(0.0, min(100.0, score)), 1)
 
     verdict = _decide_verdict(score, counts["critical"], counts["major"])
+    if document_conflicts and verdict in {VERDICT_PASS, VERDICT_BASIC}:
+        verdict = '存在冲突，待修订'
 
     return ScoreResult(
         score=score,

@@ -10,7 +10,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from App.Api import Auth, Documents, System
+from App.Api import Auth, DocumentReviews, Documents, System
 from App.Config.Settings import SettingsError, get_settings
 from App.Services.Rules.RuleSetLoader import RuleSetLoader
 from App.Utils.Errors import ApiError
@@ -29,7 +29,7 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title="ISO 13485 文件预筛平台", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="ISO 13485 文件预筛平台", version="1.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_settings().cors_origin_list,
@@ -80,4 +80,5 @@ def root():
 app.include_router(System.router)
 app.include_router(Auth.router)
 app.include_router(Documents.router)
+app.include_router(DocumentReviews.router)
 

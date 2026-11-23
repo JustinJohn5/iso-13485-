@@ -15,7 +15,7 @@ pre { padding: 14px 16px; background: #f4f6f5; font: 12px/1.8 Consolas, monospac
 @media print { @page { size: A4; margin: 18mm; } :root, body { background: #fff; } header, nav { display: none; } .layout { display: block; padding: 0; } main { border: 0; max-width: none; padding: 0; } p { font-size: 10pt; line-height: 1.65; } h1 { font-size: 22pt; } h2 { font-size: 16pt; } h3 { font-size: 12pt; break-after: avoid; } table { font-size: 9pt; } th, td { padding: 6px 8px; } tr, pre { break-inside: avoid; } a { color: #000; } .page-break { break-before: page; border: 0; margin: 0; } }
 </style></head><body><header><span>使用手册 · 2026年11月23日</span><button type="button" onclick="window.print()">打印或另存为 PDF</button></header><div class="layout"><nav aria-label="章节导航"><a href="#chapter-1">1 快速使用</a><a href="#chapter-2">2 启动和停止</a><a href="#chapter-3">3 上传与预筛</a><a href="#chapter-4">4 结果和规则包</a><a href="#chapter-5">5 MySQL 与端口</a><a href="#chapter-6">6 账号和维护</a><a href="#chapter-7">7 常见问题</a></nav><main><h1>ISO 13485 文件预筛平台使用手册</h1>
 <p>适用对象：本地使用人员及项目维护人员</p>
-<p>版本 1.0.1　编制日期 2026年11月23日</p>
+<p>版本 1.1.0　编制日期 2026年11月23日</p>
 <p>本手册根据当前项目代码和本机配置编写，帮助你启动网页、上传文件、理解预筛结果，以及维护 MySQL 和服务端口。建议先完成一次文件预筛，再阅读配置与排错章节。</p>
 <h2 id="chapter-1">1 快速使用</h2>
 <p>1. 在浏览器打开 <a href="http://127.0.0.1:5300">http://127.0.0.1:5300</a> 。若不能打开，按第 2 章启动服务。</p>
@@ -24,8 +24,8 @@ pre { padding: 14px 16px; background: #f4f6f5; font: 12px/1.8 Consolas, monospac
 <p>4. 点击“开始预筛”，等待显示“预筛完成”，查看得分、待核实项、文本证据和建议。</p>
 <p>5. 对照原始文件人工复核；再次检查可点击“新建预筛”。使用结束后点击“退出登录”。</p>
 <h3>本机信息</h3>
-<div class="table-wrap"><table><thead><tr><th scope="col">项目</th><th scope="col">当前值</th></tr></thead><tbody><tr><td>项目目录</td><td>D:/iso</td></tr><tr><td>网页地址</td><td>http://127.0.0.1:5300</td></tr><tr><td>后端地址</td><td>http://127.0.0.1:8310</td></tr><tr><td>MySQL 地址</td><td>127.0.0.1:3306</td></tr><tr><td>开发数据库</td><td>iso13485</td></tr><tr><td>独立测试数据库</td><td>iso13485_codextest</td></tr><tr><td>Windows 数据库服务名</td><td>MySQL84</td></tr></tbody></table></div>
-<p>这些是本机当前配置；环境示例默认后端端口为 8300，本机新版后端使用 8310，原 8300 进程暂保留。README 和环境示例中的 MySQL 3406 是端口规划示例，不代表本机实际监听端口。移到另一台电脑时须按实际配置调整。</p>
+<div class="table-wrap"><table><thead><tr><th scope="col">项目</th><th scope="col">当前值</th></tr></thead><tbody><tr><td>项目目录</td><td>D:/iso</td></tr><tr><td>网页地址</td><td>http://127.0.0.1:5300</td></tr><tr><td>后端地址</td><td>http://127.0.0.1:8320</td></tr><tr><td>MySQL 地址</td><td>127.0.0.1:3306</td></tr><tr><td>开发数据库</td><td>iso13485</td></tr><tr><td>独立测试数据库</td><td>iso13485_codextest</td></tr><tr><td>Windows 数据库服务名</td><td>MySQL84</td></tr></tbody></table></div>
+<p>这些是本机当前配置；环境示例与本机新版后端端口均为 8320，原 8300/8310 进程暂保留。README 和环境示例中的 MySQL 3406 是端口规划示例，不代表本机实际监听端口。移到另一台电脑时须按实际配置调整。</p>
 <h3>结果的使用边界</h3>
 <p>当前工具执行基础文本规则，不覆盖 ISO 13485 全部要求。文本命中不证明批准真实、记录完整或过程有效；任何得分均不构成认证、正式审核结论或法规符合性声明。</p>
 <h3>阅读导航</h3>
@@ -43,7 +43,7 @@ Start-Service MySQL84</code></pre>
 <p>在第二个终端启动前端，沿用 Node.js 26.13.1：</p>
 <pre aria-label="powershell"><code>Set-Location D:/iso/frontend
 npm.cmd run dev</code></pre>
-<p>打开 <a href="http://127.0.0.1:5300">http://127.0.0.1:5300</a> 。后端状态地址为 <a href="http://127.0.0.1:8310/api/v1/health">http://127.0.0.1:8310/api/v1/health</a> ，正常时返回 code 为 0、status 为 ok。此接口只确认应用存活，不检查 MySQL；数据库故障应另查连接。</p>
+<p>打开 <a href="http://127.0.0.1:5300">http://127.0.0.1:5300</a> 。后端状态地址为 <a href="http://127.0.0.1:8320/api/v1/health">http://127.0.0.1:8320/api/v1/health</a> ，正常时返回 code 为 0、status 为 ok。此接口只确认应用存活，不检查 MySQL；数据库故障应另查连接。</p>
 <h3>macOS 与 Ubuntu</h3>
 <p>将下面的 /path/to/iso 换成实际项目目录。数据库服务的启动命令取决于安装方式；Ubuntu 常见为 sudo systemctl start mysql，macOS 使用对应安装工具提供的服务命令。不要照搬 Windows 服务名。</p>
 <pre aria-label="bash"><code>cd /path/to/iso/backend
@@ -71,6 +71,11 @@ npm run dev</code></pre>
 <p>文件一旦显示“已解析”，再次点击“开始预筛”会复用已上传文件。类型可直接在下拉框修改并保存，无需重新上传；修改后结果清空，需要再次预筛。若修改了原始文件内容，请移除旧文件并重新添加，或点击“新建预筛”后重新上传。</p>
 <p>相同原件内容、相同类型在本次预筛中只计分一次，并显示合并提示；即使文件名不同也能识别。相同内容选择不同类型时系统拒绝预筛，提示统一类型后重试。这里只按原始文件字节完全相同去重，不合并内容相似或不同版本的文件。</p>
 <p>“移除文件”和“新建预筛”只清空本次页面队列或结果，不会删除数据库记录及已上传原件。刷新或退出页面后，当前网页没有历史列表可重新打开结果，重要信息请先另行记录。</p>
+<h3>关联文件与正式版本</h3>
+<p>上传相关文件后，展开“文件控制信息”，核对编号、版本、生效日期、类别、层级及状态。a～e 类对应用户提供的文件要求分类，不代表冲突时的优先级；空白模板与已填写记录应分开确认。</p>
+<p>填写审核基准日，点击“检查关联与版本”。同编号不同内容会列出候选及建议；草稿、作废、未到生效日和层级未确认的候选不能直接选为正式版。选择本次采用版本、填写至少 5 字的确认依据，再点击“确认并留痕”。直接预筛发现冲突时也会停止并提示先确认。</p>
+<p>不同文件明确引用同一编号、但数字保存期限矛盾时，显示双方原文及抽取文本行号。选择本次依据后双方仍保留，原文矛盾仍需修订。编号引用未找到时显示“本次未提供、待补充”，不是认定企业缺少文件。</p>
+<p>确认后预筛只对选定版本计分，显示被排除候选并保存当时的依据快照；其他原件不会删除。变更文件、类型、元数据或日期后需重新检查。完整说明见 D:/iso/Docs/DocumentControl.md；当前不覆盖全部语义矛盾、法规适用性或受控批准真实性。</p>
 <div class="page-break"></div>
 <h2 id="chapter-4">4 结果和规则包说明</h2>
 <h3>如何读结果</h3>
@@ -84,13 +89,14 @@ npm run dev</code></pre>
 <h3>得分怎么计算</h3>
 <p>基础分为通过项权重之和除以参与项权重之和，再乘 100；当前“主要”权重 5，“一般”权重 2。有主要待核实项时，得分上限为 75。引擎还支持严重级别及 45 分上限，当前包尚未使用该级别。</p>
 <p>页面结论来自内部评分：无严重项且得分至少 90 并无主要待核实项时显示“符合”；否则得分至少 75 为“基本符合”，至少 60 为“需整改”，更低为“不符合”。这些名称只描述当前规则结果，即使 100 分也不能据此宣布体系符合标准。</p>
+<p>若本次仍有跨文件保存期限矛盾，即使已确认采用依据，结果也会保留“存在冲突，待修订”，不因基础规则满分显示为符合；更严重的规则结论保持原样。</p>
 <h3>在哪里查看说明</h3>
 <p>左侧“规则说明”和右侧“查看规则包说明”目前都只滚动到“使用说明”，没有独立规则明细页。完整条件需查看 core.json；修改前备份并提升规则版本，在测试环境验证后重启后端。</p>
 <div class="page-break"></div>
 <h2 id="chapter-5">5 配置 MySQL 和服务端口</h2>
 <h3>两份环境文件</h3>
 <p>后端配置：D:/iso/backend/.env。前端配置：D:/iso/frontend/.env.development。修改前先安全备份；这些文件不提交 Git。保留原有加密密钥和 JWT 密钥，不要为修改端口而重新生成它们。</p>
-<div class="table-wrap"><table><thead><tr><th scope="col">文件</th><th scope="col">字段</th><th scope="col">本机当前值或用途</th></tr></thead><tbody><tr><td>后端 .env</td><td>DATABASE_URL</td><td>MySQL 连接串</td></tr><tr><td>后端 .env</td><td>BACKEND_HOST</td><td>127.0.0.1</td></tr><tr><td>后端 .env</td><td>BACKEND_PORT</td><td>8310</td></tr><tr><td>后端 .env</td><td>FRONTEND_PORT</td><td>5300 用于配置对齐</td></tr><tr><td>后端 .env</td><td>CORS_ORIGINS</td><td>允许访问的前端来源</td></tr><tr><td>前端环境文件</td><td>FRONTEND_PORT</td><td>5300 实际网页端口</td></tr><tr><td>前端环境文件</td><td>VITE_API_BASE_URL</td><td>http://127.0.0.1:8310</td></tr></tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th scope="col">文件</th><th scope="col">字段</th><th scope="col">本机当前值或用途</th></tr></thead><tbody><tr><td>后端 .env</td><td>DATABASE_URL</td><td>MySQL 连接串</td></tr><tr><td>后端 .env</td><td>BACKEND_HOST</td><td>127.0.0.1</td></tr><tr><td>后端 .env</td><td>BACKEND_PORT</td><td>8320</td></tr><tr><td>后端 .env</td><td>FRONTEND_PORT</td><td>5300 用于配置对齐</td></tr><tr><td>后端 .env</td><td>CORS_ORIGINS</td><td>允许访问的前端来源</td></tr><tr><td>前端环境文件</td><td>FRONTEND_PORT</td><td>5300 实际网页端口</td></tr><tr><td>前端环境文件</td><td>VITE_API_BASE_URL</td><td>http://127.0.0.1:8320</td></tr></tbody></table></div>
 <h3>MySQL 连接串</h3>
 <p>以下仅为格式示例；不要直接覆盖已配置的真实密码：</p>
 <pre aria-label="text"><code>DATABASE_URL=mysql+pymysql://账号:密码@主机:端口/库名?charset=utf8mb4</code></pre>
@@ -99,7 +105,7 @@ npm run dev</code></pre>
 <p>打开 Workbench，新增连接，选择 Standard TCP/IP，Hostname 填 127.0.0.1，Port 填 3306，Username 填项目数据库账号 iso_user。密码使用后端 .env 中 DATABASE_URL 的密码部分；若做过 URL 编码，应还原后输入。测试连接成功后选择 iso13485。网页管理员邮箱及密码不能用于登录 MySQL。</p>
 <h3>更换端口的例子</h3>
 <p>将网页端口从 5300 改为 5310：修改前端 FRONTEND_PORT、后端 FRONTEND_PORT，并将后端 CORS_ORIGINS 中允许的网页来源端口一并改为 5310，重启前后端后访问新地址。</p>
-<p>将后端从 8310 改为 8320：修改后端 BACKEND_PORT，以及前端 VITE_API_BASE_URL 的端口，再重启前后端。更改 MySQL 监听端口需先调整数据库服务配置并重启 MySQL，再更新 DATABASE_URL；Windows 本机服务指定配置文件为 C:/Program Files/MySQL/MySQL Server 8.4/my.ini。macOS 和 Ubuntu 路径按安装方式确认。</p>
+<p>将后端从 8320 改为 8330：修改后端 BACKEND_PORT，以及前端 VITE_API_BASE_URL 的端口，再重启前后端。更改 MySQL 监听端口需先调整数据库服务配置并重启 MySQL，再更新 DATABASE_URL；Windows 本机服务指定配置文件为 C:/Program Files/MySQL/MySQL Server 8.4/my.ini。macOS 和 Ubuntu 路径按安装方式确认。</p>
 <p>本地网页建议始终使用 127.0.0.1；不要一端用 localhost、另一端用 127.0.0.1，以免 Cookie 跨站限制影响登录。测试前后端规划使用 5400、8400，正式使用 5500、8500；测试库必须独立，不能用正式库测试。</p>
 <div class="page-break"></div>
 <h2 id="chapter-6">6 账号和数据维护</h2>
@@ -119,16 +125,16 @@ npm run dev</code></pre>
 <p>InitDb.py 只用于已确认的空开发库或测试库，创建缺失表，不会升级已有表。当前本机已初始化，不需日常重复运行。结构升级应使用经测试库验证的迁移，不通过删库重建解决问题。</p>
 <p>本机已验证虚拟环境为 Python 3.12.10，Node 为 26.13.1；当前 backend/.python-version 写的是 3.15，与虚拟环境和 README 不一致。维护时沿用现有 .venv，不按该文件盲目升级解释器；版本声明统一需单独处理。</p>
 <p>当前界面还没有模型配置、历史记录查询、报告导出或服务配置页面。MySQL 和端口需改环境文件；预筛使用规则引擎，不需要填写大模型 API Key。</p>
-<h3>后续整套文件如何对照</h3>
-<p>后续建议以审核项目保存文件集，建立“质量手册要求 → 程序文件 → 表单模板 → 已填写记录”的多对多关联，结合编号、版本、引用原文、职责、频次和记录期间核对。只上传手册时，被引用的程序或记录标为“本次未提供、待补充”，不能直接认定企业没有。</p>
-<p>详细方案位于 D:/iso/Docs/DocumentSetDesign.md。目前跨文件引用、版本一致性和执行证据链属于后续建设内容，当前批量上传仍逐份预筛，不能替代整套文件关联审核。</p>
+<h3>整套文件的当前能力与后续建设</h3>
+<p>当前已支持本批次编号引用、同编号版本确认、记录层级校正和明确数字保存期限冲突。后续以长期审核项目保存“质量手册要求 → 程序文件 → 表单模板 → 已填写记录”的多对多关系，扩展职责、频次和记录期间核对。只上传手册时，被引用的程序或记录列为“本次未提供、待补充”，不能直接认定企业没有。</p>
+<p>详细方案位于 D:/iso/Docs/DocumentSetDesign.md。目前长期项目、跨批次补件、完整语义一致性及执行证据链仍属于后续建设内容；当前基础关联检查不能替代整套体系审核。</p>
 <div class="page-break"></div>
 <h2 id="chapter-7">7 常见问题和排查顺序</h2>
 <h3>网页打不开</h3>
 <p>先检查地址是否为 <a href="http://127.0.0.1:5300">http://127.0.0.1:5300</a> ，再确认前端终端在运行。修改过端口要使用新地址。端口占用时先确认进程，不要直接结束陌生进程。</p>
 <p>Windows 查看监听情况：</p>
-<pre aria-label="powershell"><code>Get-NetTCPConnection -State Listen -LocalPort 5300,8310</code></pre>
-<p>macOS 查看单个端口；查询后端时将 5300 改为 8310：</p>
+<pre aria-label="powershell"><code>Get-NetTCPConnection -State Listen -LocalPort 5300,8320</code></pre>
+<p>macOS 查看单个端口；查询后端时将 5300 改为 8320：</p>
 <pre aria-label="bash"><code>lsof -nP -iTCP:5300 -sTCP:LISTEN</code></pre>
 <p>Ubuntu 对应查询：</p>
 <pre aria-label="bash"><code>ss -ltnp &#x27;sport = :5300&#x27;</code></pre>

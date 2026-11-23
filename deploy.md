@@ -6,7 +6,7 @@
 
 | 环境 | 前端 | 后端 | MySQL 示例端口 |
 |---|---:|---:|---:|
-| 本地开发 | 5300 | 8300 | 3406 |
+| 本地开发 | 5300 | 8320 | 3406 |
 | 测试/E2E | 5400 | 8400 | 3407 |
 | 正式环境 | 5500 | 8500 | 3306（私网） |
 
@@ -63,3 +63,27 @@ ALTER TABLE uploaded_files
 - 新增 `PATCH /api/v1/documents/{file_uid}`，JSON 为 `{"document_type":"auto"}` 或已有类型；仅允许上传者或管理员且具备写权限时修改。响应返回实际类型和识别信息。反向代理如限制方法，需允许 PATCH；后端已同步允许该跨域方法。
 - `POST /api/v1/validations` 保留原有响应，新增 `documents`、`duplicate_files`；相同内容相同类型只判定一次，相同内容不同类型返回 HTTP 400 / code 1001，不创建预筛记录。
 - 自动分类只决定当前专用规则的适用范围，不区分完整的文件层级，不提供跨文件关联结论；后续建设方案见 `Docs/DocumentSetDesign.md`。
+
+## 1.1.0 文件集审查更新
+
+本次新增 `document_reviews` 表（审查标识、创建者索引、修订号、JSON 快照、创建时间），以及 `validation_runs.review_snapshot` 可空 JSON 列。初始空库通过既有 `InitDb.py` 建表；已有库使用版本化入口 `MigrateDocumentReviews.py`，不删表重建，不改写已有预筛结果。
+
+先备份数据库，在 MySQL 8.4 的 `_codextest` 副本应用并运行回归。激活项目虚拟环境后，在 `backend` 目录执行：
+
+```bash
+python MigrateDocumentReviews.py --env-file ../.env.test
+```
+
+测试通过后，本地开发环境执行 `python MigrateDocumentReviews.py`，从后端 `.env` 读取开发连接。入口可重复执行；MySQL DDL 不保证事务回滚，部分失败时保留备份、确认表/列状态后重试。正式环境只有获得发布授权后才可使用同一入口 `python MigrateDocumentReviews.py --allow-production`，不使用开发/测试连接串替代正式配置。随后部署前后端并重启服务。
+
+新增 API：
+
+- `POST /api/v1/document-reviews`：JSON `file_uids`、`as_of_date` 和可选 `overrides`（文件标识 → 校正字段）。一次批量读取文件；校正支持编号、修订、生效日、类别、层级、状态，保存于审查快照，不改原件。
+- `GET /api/v1/document-reviews/{review_uid}`：读取本人或管理员可访问的快照。
+- `PATCH /api/v1/document-reviews/{review_uid}/decisions`：JSON `revision`、`kind`（version/requirement）、`issue_id`、`file_uid`、`reason`。通过权限、候选、日期状态及乐观锁校验后更新，追加历史与审计日志。
+- `POST /api/v1/validations` 增加 Form 字段 `review_uid` / `review_revision`。提交审查时两者须对应最新修订，按确认范围预筛并保存冻结快照。旧调用未提交审查时仍可处理无检测冲突文件；检测到版本或明确期限冲突会返回 409，不能绕过确认。
+- 上传和类型修改响应新增 `control_metadata`；预筛新增 `excluded_versions`、`document_review`。原有字段保留，前后端须一同发布。
+
+错误码：1601 审查不存在（404）、1602 审查已更新（409）、1603 文件集/类型已变化（409）、1604 冲突未确认（409）；非法元数据或不允许的候选使用 1001（400），越权使用 1104（403）。本次无需新增环境变量或大模型配置。
+
+界面中的正式版是本次预筛采用依据，不能替代组织受控批准发布。内容比较只覆盖明确同编号的数字保存期限；完整语义冲突与法规适用性仍需人工复核。详见 `Docs/DocumentControl.md`。

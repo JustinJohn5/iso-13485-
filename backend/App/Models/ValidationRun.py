@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, DateTime, Integer, JSON, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from App.Db.Base import Base
@@ -44,6 +44,7 @@ class ValidationRun(Base):
     llm_model: Mapped[str] = mapped_column(String(128), nullable=False, default="", comment="使用的模型")
     llm_latency_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="大模型耗时毫秒")
     note: Mapped[str] = mapped_column(String(500), nullable=False, default="", comment="备注")
+    review_snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True, comment="本次文件集正式依据的冻结快照")
     error_message: Mapped[str] = mapped_column(String(1000), nullable=False, default="", comment="失败原因")
     created_by: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now, index=True)
