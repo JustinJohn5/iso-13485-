@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { login, watchPage } from './Helpers';
+import { login, verifyWordDownload, watchPage } from './Helpers';
 import { spawnSync } from 'node:child_process';
 
 async function openAuthoring(page: import('@playwright/test').Page) {
@@ -8,7 +8,7 @@ async function openAuthoring(page: import('@playwright/test').Page) {
   await expect(page.getByTestId('template-finished-inspection')).toBeVisible();
 }
 
-test('检索、生成、参数联动、修订与历史 Word 下载', async ({ page }) => {
+test('检索、生成、参数联动、修订与历史 Word 下载', async ({ page }, testInfo) => {
   const assertClean = watchPage(page);
   await openAuthoring(page);
   await page.getByTestId('template-search').fill('无此模板');
@@ -44,10 +44,13 @@ test('检索、生成、参数联动、修订与历史 Word 下载', async ({ pa
   const file = await downloaded;
   expect(file.suggestedFilename()).toContain('草稿-r3.docx');
   expect(await file.failure()).toBeNull();
+  await verifyWordDownload(file, testInfo.outputPath('CurrentDraft.docx'), 'MODEL-B', 3);
   await page.getByTestId('draft-history').locator('summary').click();
   const history = page.waitForEvent('download');
   await page.getByTestId('history-download-1').click();
-  expect((await history).suggestedFilename()).toContain('r1.docx');
+  const oldFile = await history;
+  expect(oldFile.suggestedFilename()).toContain('r1.docx');
+  await verifyWordDownload(oldFile, testInfo.outputPath('HistoricalDraft.docx'), 'MODEL-A', 1);
   const stored = await page.request.get(`${process.env.E2E_API_BASE_URL}/api/v1/document-drafts/${draft.draft_uid}`);
   expect(stored.status()).toBe(200);
   const data = (await stored.json()).data;

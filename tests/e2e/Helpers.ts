@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type Download, type Page } from '@playwright/test';
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
@@ -34,6 +34,14 @@ export async function login(page: Page) {
   await page.getByTestId('login-password').fill(password);
   await page.getByTestId('login-submit').click();
   await expect(page.getByTestId('upload-dropzone')).toBeVisible();
+}
+
+export async function verifyWordDownload(download: Download, path: string, model: string, revision: number) {
+  await download.saveAs(path);
+  const result = spawnSync(process.env.E2E_PYTHON!, [resolve('tests/Helpers/WordDownload.py'), path, model, String(revision)], {
+    encoding: 'utf-8', env: process.env,
+  });
+  expect(result.status, result.stdout + result.stderr).toBe(0);
 }
 
 export function textFile(name: string, text = manualText) {

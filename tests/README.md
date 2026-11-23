@@ -57,6 +57,8 @@ macOS / Ubuntu：
 - `tests/e2e/LlmSettings.spec.ts`：管理员配置、API Key 密文入库且不回显、审核员越权拒绝、实际模型调用失败后保留草稿。测试结束仅在配置仍由本次账号修改时恢复原测试库配置，不触碰开发/正式配置。
 
 - `tests/Services/test_TemplateLibrary.py`：模板检索、输入边界、参数联动、历史隔离及真实 Word 内容。
+- `tests/Services/test_WordExport.py`：参考手册页面尺寸、封面和页眉、宋体行距、更改历史、动态目录与页码、长标识和原手册内容隔离；无数据库依赖。可在后端虚拟环境执行 `python -m pytest ../tests/Services/test_WordExport.py -q`。
+- Word 下载 E2E 使用 `tests/Helpers/WordDownload.py` 读取实际下载件，校验新版格式以及当前／历史修订的型号与正文，不只检查文件名。运行方式仍为根目录 `python tests/RunE2e.py tests/e2e/Authoring.spec.ts`，依赖既有 `.env.test` 和 MySQL 8.4 `_codextest` 副本。
 - `tests/e2e/Authoring.spec.ts`：检索、生成、编辑、参数更新、历史下载、乐观锁和跨用户访问；另以390px窄屏验证模板、配置、返回、退出导航。草稿数据保存在独立 MySQL 测试库，结束后随本次测试用户清理。
 
 - `tests/Services/`：文件安全校验、自动类型识别、手动覆盖、歧义与未知类型、规则证据及日期文本。
