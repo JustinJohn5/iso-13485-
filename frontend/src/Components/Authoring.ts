@@ -4,6 +4,7 @@ import { escape } from '../Utils/Html';
 import '../authoring.css';
 import { llmApi } from '../Api/Llm';
 import { LlmSettingsPage } from './LlmSettings';
+import { DraftBatchPanel } from './DraftBatch';
 
 export class AuthoringWorkspace {
   private templates: Template[] = [];
@@ -62,6 +63,7 @@ export class AuthoringWorkspace {
         <div class="content-wrap authoring-wrap"><section class="page-heading"><div><p class="eyebrow">DOCUMENT AUTHORING</p><h1>模板与编写</h1><p>查找模板，填写项目参数，生成并修订技术文件。</p></div></section>
           <div class="notice-bar"><span class="notice-icon">i</span><p>模板为项目自有示例；生成文件保留草稿状态，批准、生效、检验限值及事实数据须人工核实。</p></div>
           ${this.message ? `<p data-testid="authoring-notice" class="inline-notice ${this.failed ? 'is-error' : ''}" role="status">${escape(this.message)}</p>` : ''}
+          <section class="section-block batch-section"><button class="button button-secondary" type="button" id="open-batch" data-testid="open-batch" ${this.busy ? 'disabled' : ''}>跨文档参数联动</button><div id="batch-container"></div></section>
           <fieldset class="authoring-fieldset" ${this.busy ? 'disabled' : ''}>
             <div class="authoring-grid"><section class="section-block template-panel"><h2>模板检索</h2>
               <form id="template-search-form" class="template-search"><input aria-label="搜索模板" data-testid="template-search" id="template-query" placeholder="搜索名称、用途或关键词" value="${escape(this.query)}">
@@ -93,6 +95,13 @@ export class AuthoringWorkspace {
   }
 
   private bind(): void {
+    this.root.querySelector('#open-batch')?.addEventListener('click', () => {
+      void new DraftBatchPanel(this.root.querySelector<HTMLElement>('#batch-container')!, async () => {
+        this.drafts = await authoringApi.drafts();
+        if (this.draft) this.useDraft(await authoringApi.draft(this.draft.draft_uid));
+        this.message = '所选草稿参数已联动，旧修订保留。'; this.render();
+      }).open();
+    });
     this.root.querySelector('#open-llm-settings')?.addEventListener('click', () => {
       void new LlmSettingsPage(this.root, () => { void this.run(async () => { this.aiReady = (await llmApi.status()).ready; }); }).open();
     });

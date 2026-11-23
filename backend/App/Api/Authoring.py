@@ -30,8 +30,8 @@ def templates(q: str = Query('', max_length=120), category: str = Query('', max_
 
 @router.get('/document-drafts')
 def drafts(db: Session = Depends(get_db), user: User = Depends(current_user)):
-    rows = db.execute(select(DocumentDraft).where(DocumentDraft.created_by == user.id)
-                      .order_by(DocumentDraft.id.desc()).limit(50)).scalars().all()
+    rows = db.execute(select(DocumentDraft.draft_uid, DocumentDraft.revision, DocumentDraft.snapshot).where(DocumentDraft.created_by == user.id)
+                      .order_by(DocumentDraft.id.desc()).limit(50)).all()
     return success([{'draft_uid': row.draft_uid, 'revision': row.revision, 'title': row.snapshot['title'],
                      'project': row.snapshot['parameters']['project']} for row in rows])
 

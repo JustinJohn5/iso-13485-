@@ -43,6 +43,8 @@ macOS / Ubuntu：
 
 ## 目录及覆盖范围
 
+- `tests/Services/test_DraftBatch.py` 与 `tests/e2e/DraftBatch.spec.ts`：批量计划、共享字段边界、预览不写入、跨文件参数更新、各编号保留、旧版保留与任一过期时整体拒绝。
+
 - `tests/Services/test_AuditQuestions.py`：问题分类、去重、原文证据、旧版排除、已确认冲突仍提示、实际 Word 记录字段。
 - `tests/e2e/AuditQuestions.spec.ts`：预筛至内审问题清单的完整交互、引用缺项、下载及其他用户权限。
 
