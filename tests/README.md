@@ -2,29 +2,53 @@
 
 ## 环境准备
 
-- 后端：Python `3.12.10`，在 `backend` 目录创建虚拟环境并执行 `pip install -r requirements.lock`。
-- 单元测试：安装 `pytest`（`pip install pytest`）。测试不连接数据库，不需要真实业务数据。
-- 前端：在 `frontend` 目录执行 `npm install`。
-- 浏览器 E2E：在项目根目录执行 `npm install`，再执行 `npx playwright install chromium`。
+- 沿用 Python 3.12.10 和项目虚拟环境。在 `backend` 目录执行 `python -m pip install -r requirements.lock`，需要时安装 `pytest`。单元测试不连接数据库。
+- 前端与根目录分别执行 `npm ci`，沿用 Node.js 26.13.1。根目录执行 `npx playwright install chromium`；已安装 Edge 时也可配置 `E2E_BROWSER_CHANNEL=msedge`。
+- E2E 使用 MySQL 8.4 的独立库（如 `iso13485_codextest`），先用当前发布版本初始化表。严禁使用开发或正式业务库。无需每次重建测试库。
+- 复制根目录 `.env.test.example` 为 `.env.test`，填写测试连接串、随机密钥、前后端地址及端口。上传目录须在项目 `.local` 内；相对路径按后端目录解析。真实 `.env.test` 被 Git 忽略。
 
-## 运行方式
+## 单元测试和构建
 
-- 后端全部单元测试：在 `backend` 目录执行 `python -m pytest ../tests/Services -q`。
-- 单个测试文件：`python -m pytest ../tests/Services/test_RuleEngine.py -q`。
-- 前端构建与 TypeScript 检查：在 `frontend` 目录执行 `npm run build`。
-- E2E 无头运行：配置 `E2E_BASE_URL`、`E2E_EMAIL`、`E2E_PASSWORD` 后，在项目根目录执行 `npm run test:e2e`。
-- E2E 有头调试：在项目根目录执行 `npx playwright test --headed`。
+在已激活虚拟环境的 `backend` 目录执行：
 
-## 目录结构
+```bash
+python -m pytest ../tests/Services -q
+python -m pytest ../tests/Services/test_DocumentClassifier.py -q
+python -m pytest ../tests/Services/test_RuleEngine.py -q
+```
 
-- `tests/Services/`：文本规则引擎与文件安全校验。
-- `tests/e2e/`：浏览器登录、上传及预筛交互。
+在 `frontend` 目录执行 `npm run build -- --mode development`，读取既有 `.env.development` 并完成 TypeScript 检查和构建。正式构建使用 `npm run build`，需先准备 `.env.production`。不能因缺少构建环境配置而添加业务代码默认值。
 
-## 注意事项
+## E2E 运行方式
 
-- 单元测试使用内存中的规则模型和临时文件，不访问 MySQL。
-- 手工运行后端接口需要使用独立 MySQL 8.4 开发/测试数据库；测试环境须配置 `APP_ENV=test` 和独立的 `DATABASE_URL`，不得复用正式数据库。
-- E2E 必须连接测试数据库（建议库名后缀 `_codextest`），并预先创建专用测试账号。测试账号通过环境变量提供，不写入用例。
-- E2E 服务需分别启动：后端使用测试环境配置，前端设置 `VITE_API_BASE_URL` 和 `FRONTEND_PORT`。后端/前端测试端口应与本地开发和正式端口分开。
-- E2E 上传写入测试数据库和测试上传目录；运行后清理测试库中的测试数据与上传文件。
-- 当前规则集只做文本线索预筛，不构成 ISO 13485 认证、审核或法规符合性结论。
+在项目根目录运行。Windows PowerShell：
+
+```powershell
+./backend/.venv/Scripts/python.exe tests/RunE2e.py
+./backend/.venv/Scripts/python.exe tests/RunE2e.py tests/e2e/Recognition.spec.ts
+./backend/.venv/Scripts/python.exe tests/RunE2e.py --headed
+```
+
+macOS / Ubuntu：
+
+```bash
+./backend/.venv/bin/python tests/RunE2e.py
+./backend/.venv/bin/python tests/RunE2e.py tests/e2e/Recognition.spec.ts
+./backend/.venv/bin/python tests/RunE2e.py --headed
+```
+
+默认无头运行。入口读取 `.env.test`，校验环境、库名、MySQL 版本、上传目录和端口，创建随机专用账号，独立启动测试前后端，等待就绪后运行 Playwright。不需要人工启动测试服务，也不使用现有管理员密码。
+
+测试端口默认前端 5400、后端 8400，与本地 5300/8300、正式 5500/8500 分离；数据库按连接串实际端口访问独立测试库。测试结束（包括用例失败）会停止本次启动的服务，并批量清理本次账号、上传原件与预筛记录。强制杀死测试入口可能跳过清理，需检查 `.local/E2eLogs` 和测试进程归属再处理，不得盲目结束端口进程或清空测试库。
+
+## 目录及覆盖范围
+
+- `tests/Services/`：文件安全校验、自动类型识别、手动覆盖、歧义与未知类型、规则证据及日期文本。
+- `tests/e2e/Helpers.ts`：登录、上传样本、网络与浏览器错误监测、数据库断言。
+- `tests/e2e/Auth.spec.ts`：专用账号登录和退出。
+- `tests/e2e/Recognition.spec.ts`：自动识别、真实 DOCX 抽取、证据差异、条款合并、折叠、手动类型更新、重复计分、冲突拒绝、非法类型与移除。
+- `tests/Helpers/`：DOCX 样本生成和测试库只读验证；`tests/RunE2e.py`：环境与数据生命周期管理。
+
+浏览器用例检查 pageerror、console error、非预期 HTTP 错误及页面反馈，写入场景同时查询测试库验证类型、去重数量及拒绝后无新增记录。只允许按具体路径、状态码和业务码标明的预期失败，不整体忽略浏览器错误。
+
+本工具当前只做文本线索预筛。测试通过不表示规则覆盖 ISO 13485 全部要求，也不验证企业实际执行情况。

@@ -12,6 +12,7 @@ from App.Services.Rules.RuleModels import CheckSpec
 from App.Services.Rules.TextNormalizer import (
     compress,
     heading_lines,
+    normalize_text,
     snippet,
 )
 from App.Utils.TimeUtils import now, parse_date
@@ -43,14 +44,14 @@ def _as_outcome(passed: bool, evidence: str, detail: str) -> CheckOutcome:
 
 def check_present(text: str, spec: CheckSpec) -> CheckOutcome:
     """要求文本中出现指定模式，至少 min_matches 处。"""
-    hits: list[tuple[int, int]] = []
+    text = normalize_text(text)
+    hits: set[tuple[int, int]] = set()
     for pattern in spec.patterns:
         for match in compile_pattern(pattern).finditer(text):
-            hits.append((match.start(), match.end()))
-    hits.sort()
+            hits.add((match.start(), match.end()))
     if len(hits) >= spec.min_matches:
-        start, end = hits[0]
-        return _as_outcome(True, snippet(text, start, end), f"命中 {len(hits)} 处相关内容")
+        start, end = min(hits)
+        return _as_outcome(True, text[start:end], f"命中 {len(hits)} 处相关内容")
     return _as_outcome(
         False,
         "",

@@ -49,6 +49,17 @@ ALTER TABLE uploaded_files
 
 - 后端：`APP_ENV`、`LOG_LEVEL`、`LOG_DIR`、`BACKEND_HOST`、`BACKEND_PORT`、`FRONTEND_PORT`、`CORS_ORIGINS`、`DATABASE_URL`、`DATABASE_POOL_SIZE`、`DATABASE_MAX_OVERFLOW`、`CONFIG_ENCRYPTION_KEY`、`JWT_SECRET`、`JWT_EXPIRE_MINUTES`、`UPLOAD_DIR`、`MAX_UPLOAD_SIZE_MB`、`RULE_SET_DIR`、`ACCESS_TOKEN_COOKIE_NAME`。
 - 前端：`VITE_APP_TITLE`、`VITE_API_BASE_URL`、`FRONTEND_PORT`。这些值会暴露给浏览器，不得存放秘密。
-- 测试/E2E：使用独立 `APP_ENV=test`、测试 MySQL 和不与开发/正式环境冲突的端口。E2E 账号通过 `E2E_EMAIL`、`E2E_PASSWORD` 临时注入，不写入仓库。
+- 测试/E2E：复制根目录 `.env.test.example` 为 `.env.test`，配置独立 `APP_ENV=test`、MySQL 8.4 的 `_codextest` 库、测试密钥及上传目录。测试前后端使用 5400/8400，开发与正式服务使用其他端口。同一 MySQL 实例可提供独立测试库；单独部署测试实例时设置其实际端口。
+- 测试入口地址：`E2E_BASE_URL` 为测试前端，`E2E_API_BASE_URL` 和 `VITE_API_BASE_URL` 为测试后端，必须对应测试服务的地址和端口；`E2E_BROWSER_CHANNEL` 留空使用 Playwright Chromium，可填 `msedge` 使用本机 Edge。
+- `tests/RunE2e.py` 在子进程环境中临时注入随机 `E2E_EMAIL`、`E2E_PASSWORD` 和当前解释器路径 `E2E_PYTHON`；这些不是部署凭证，不写入仓库。准备、运行与清理方式见 `tests/README.md`。
 
 配置字段和端口示例见 `backend/.env.example` 与 `frontend/.env.example`。修改端口、加密密钥或跨域来源时需同步维护这两个示例文件。
+
+## 1.0.1 更新部署
+
+本次无数据库结构变更，既有数据库无需迁移。部署后重启后端并重新构建前端，规则包版本为 1.0.1。
+
+- `POST /api/v1/documents` 省略 `document_type` 时默认为 `auto`；手动类型继续兼容。响应新增 `type_detection`（类型、标签、线索来源、置信度和说明）。
+- 新增 `PATCH /api/v1/documents/{file_uid}`，JSON 为 `{"document_type":"auto"}` 或已有类型；仅允许上传者或管理员且具备写权限时修改。响应返回实际类型和识别信息。反向代理如限制方法，需允许 PATCH；后端已同步允许该跨域方法。
+- `POST /api/v1/validations` 保留原有响应，新增 `documents`、`duplicate_files`；相同内容相同类型只判定一次，相同内容不同类型返回 HTTP 400 / code 1001，不创建预筛记录。
+- 自动分类只决定当前专用规则的适用范围，不区分完整的文件层级，不提供跨文件关联结论；后续建设方案见 `Docs/DocumentSetDesign.md`。

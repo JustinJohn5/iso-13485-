@@ -25,6 +25,15 @@ export interface UploadedDocument {
   char_count: number;
   page_count: number;
   warnings: string[];
+  type_detection: TypeDetection;
+}
+
+export interface TypeDetection {
+  type: string;
+  label: string;
+  source: 'filename' | 'content' | 'unrecognized' | 'ambiguous';
+  confidence: 'high' | 'medium' | 'low';
+  reason: string;
 }
 
 export interface Finding {
@@ -53,6 +62,8 @@ export interface ValidationResult {
     clause_matrix: Array<{ clause: string; clause_title: string; rate: number }>;
   };
   findings: Finding[];
+  documents: Array<{ name: string; document_type: string; type_label: string }>;
+  duplicate_files: Array<{ name: string; kept_name: string }>;
   disclaimer: string;
 }
 
@@ -84,6 +95,10 @@ export const api = {
     body.append('document_type', documentType);
     return request<UploadedDocument>('/api/v1/documents', { method: 'POST', body });
   },
+  updateType: (uid: string, documentType: string) => request<Pick<UploadedDocument, 'file_uid' | 'document_type' | 'type_detection'>>(`/api/v1/documents/${encodeURIComponent(uid)}`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ document_type: documentType }),
+  }),
   validate: (uids: string[]) => {
     const body = new FormData();
     uids.forEach((uid) => body.append('file_uids', uid));

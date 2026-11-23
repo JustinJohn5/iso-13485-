@@ -6,6 +6,7 @@ import hashlib
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from App.Api.Dependencies import current_user, require_writer
@@ -20,6 +21,7 @@ from App.Models.User import User
 from App.Models.ValidationDocument import ValidationDocument
 from App.Models.ValidationRun import STATUS_SUCCEEDED, ValidationRun
 from App.Services.Extraction.ExtractorRegistry import extract
+from App.Services.DocumentClassifier import resolve_document_type
 from App.Services.Rules.RuleEngine import DocumentInput, RuleEngine
 from App.Services.ScoringService import build_score
 from App.Utils.Errors import ApiError
@@ -38,17 +40,43 @@ router = APIRouter(prefix="/api/v1", tags=["文档"])
 _CHUNK_SIZE = 1024 * 1024
 
 
+class DocumentTypeUpdate(BaseModel):
+    document_type: str
+
+
+@router.patch("/documents/{file_uid}")
+def update_document_type(
+    file_uid: str,
+    payload: DocumentTypeUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    require_writer(user)
+    row = FileDao.get_by_uid(db, file_uid)
+    if row is None:
+        raise ApiError(1203)
+    if user.role != "admin" and row.uploaded_by != user.id:
+        raise ApiError(1104)
+    resolved, detection = resolve_document_type(
+        payload.document_type, row.original_name, row.extracted_text, rule_loader().get(),
+    )
+    row.document_type = resolved
+    db.commit()
+    return success({"file_uid": row.file_uid, "document_type": resolved,
+                    "type_detection": detection.to_dict()}, "文件类型已更新")
+
+
 @router.post("/documents")
 async def upload_document(
     file: UploadFile = File(...),
-    document_type: str = Form(...),
+    document_type: str = Form("auto"),
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
     require_writer(user)
     rule_set = rule_loader().get()
     valid_types = {item.type for item in rule_set.document_types}
-    if document_type not in valid_types:
+    if document_type != "auto" and document_type not in valid_types:
         raise ApiError(1001, "请选择有效的文件类型")
 
     settings = get_settings()
@@ -73,12 +101,13 @@ async def upload_document(
         extracted = extract(path, extension)
         if extracted.status != "ok":
             raise ApiError(1205, "文件可读取文本过少；扫描件请先进行 OCR 处理")
+        resolved_type, detection = resolve_document_type(document_type, original_name, extracted.text, rule_set)
         row = UploadedFile(
             file_uid=str(uuid4()),
             original_name=original_name,
             stored_name=stored_name,
             extension=extension,
-            document_type=document_type,
+            document_type=resolved_type,
             mime_type=canonical_mime(extension),
             size_bytes=size,
             sha256=digest.hexdigest(),
@@ -93,7 +122,8 @@ async def upload_document(
         return success({
             "file_uid": row.file_uid,
             "name": row.original_name,
-            "document_type": document_type,
+            "document_type": resolved_type,
+            "type_detection": detection.to_dict(),
             "size_bytes": row.size_bytes,
             "char_count": row.char_count,
             "page_count": row.page_count,
@@ -123,7 +153,21 @@ def validate_documents(
     if user.role != "admin" and any(row.uploaded_by != user.id for row in files):
         raise ApiError(1104)
     rule_set = rule_loader().get()
-    # 文档类型在上传响应中只供界面展示；校验时由文件名和文本进行保守识别。
+    # 一次批量查询后在内存中按内容摘要去重，避免重复文件重复计分。
+    unique_uids: list[str] = []
+    seen: dict[str, UploadedFile] = {}
+    duplicates: list[dict[str, str]] = []
+    for uid in file_uids:
+        row = by_uid[uid]
+        previous = seen.get(row.sha256)
+        if previous:
+            if previous.document_type != row.document_type:
+                raise ApiError(1001, "相同内容的文件选择了不同类型，请统一文件类型后重试")
+            duplicates.append({"name": row.original_name, "kept_name": previous.original_name})
+            continue
+        seen[row.sha256] = row
+        unique_uids.append(uid)
+    file_uids = unique_uids
     inputs = [
         DocumentInput(
             file_id=by_uid[uid].id,
@@ -136,7 +180,6 @@ def validate_documents(
         )
         for uid in file_uids
     ]
-    # 用文件名推断容易误分类，前端上传表单把显式类型一并传入校验请求。
     evaluations = RuleEngine(rule_set).evaluate(inputs)
     score = build_score(rule_set, evaluations)
     timestamp = now()
@@ -171,6 +214,9 @@ def validate_documents(
         "run_uid": run.run_uid,
         "rule_set": {"title": rule_set.title, "standard": rule_set.standard, "version": rule_set.version},
         "score": score.to_dict(),
+        "duplicate_files": duplicates,
+        "documents": [{"name": item.name, "document_type": item.document_type,
+                       "type_label": rule_set.document_type_label(item.document_type)} for item in inputs],
         "findings": [
             {"rule_id": item.rule.rule_id, "title": item.rule.title, "clause": item.rule.clause,
              "clause_title": item.rule.clause_title, "severity": item.rule.severity,
