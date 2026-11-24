@@ -10,7 +10,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from App.Api import AuditReports, Auth, Authoring, DocumentReviews, Documents, DraftBatches, LlmSettings, System
+from App.Api import AuditReports, Auth, Authoring, DocumentReviews, Documents, DraftBatches, LlmSettings, ManualSuites, System
 from App.Config.Settings import SettingsError, get_settings
 from App.Services.Rules.RuleSetLoader import RuleSetLoader
 from App.Utils.Errors import ApiError
@@ -29,12 +29,12 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title="ISO 13485 文件预筛平台", version="1.2.4", lifespan=lifespan)
+app = FastAPI(title="ISO 13485 文件预筛平台", version="1.3.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_settings().cors_origin_list,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
 
@@ -85,4 +85,5 @@ app.include_router(Authoring.router)
 app.include_router(LlmSettings.router)
 app.include_router(AuditReports.router)
 app.include_router(DraftBatches.router)
+app.include_router(ManualSuites.router)
 

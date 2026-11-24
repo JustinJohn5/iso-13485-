@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.orm import Session
@@ -14,6 +14,8 @@ from App.Api.Dependencies import current_user
 from App.Db.Session import get_db
 from App.Dao.UserDao import UserDao
 from App.Models.User import User
+from App.Schemas.Registration import RegistrationRequest
+from App.Services.Registration import register_user
 from App.Utils.Errors import ApiError
 from App.Utils.Response import success
 from App.Utils.Security import create_access_token, verify_password
@@ -24,6 +26,11 @@ router = APIRouter(prefix="/api/v1/auth", tags=["认证"])
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+
+
+@router.post('/register', status_code=201)
+def register(payload: RegistrationRequest, request: Request, db: Session = Depends(get_db)):
+    return success(register_user(db, payload, request.client.host if request.client else ''))
 
 
 @router.post("/login")

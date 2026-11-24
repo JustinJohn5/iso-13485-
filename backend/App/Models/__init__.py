@@ -3,6 +3,7 @@
 from App.Models.AuditLog import AuditLog
 from App.Models.DocumentReview import DocumentReview
 from App.Models.DocumentDraft import DocumentDraft
+from App.Models.ManualSuite import ManualSuite
 from App.Models.Finding import Finding
 from App.Models.LlmConfig import LlmConfig
 from App.Models.UploadedFile import UploadedFile
@@ -14,6 +15,7 @@ __all__ = [
     "AuditLog",
     "DocumentReview",
     "DocumentDraft",
+    "ManualSuite",
     "Finding",
     "LlmConfig",
     "UploadedFile",

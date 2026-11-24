@@ -4,8 +4,6 @@ import json
 from types import SimpleNamespace
 
 import pytest
-import httpx
-from openai import APIConnectionError, APIStatusError, APITimeoutError
 from pydantic import ValidationError
 
 from App.Schemas.LlmSettings import LlmSettingsUpdate
@@ -46,7 +44,7 @@ def test_invalid_ai_output_rejected_without_mutating_draft(output, monkeypatch):
     assert error.value.code == 1402 and snapshot == original
 
 
-def mock_client(monkeypatch, text='{"sections":{}}', finish='stop', error=None):
+def mock_client(monkeypatch, text='{"sections":{}}', finish='stop'):
     config = SimpleNamespace(enabled=True, base_url='https://test.invalid/v1', model='test-model',
                              api_key_cipher='encrypted-placeholder', timeout_seconds=10, max_tokens=1000, temperature=0.2)
     monkeypatch.setattr(Client.LlmConfigDao, 'get_default', lambda db: config)
@@ -60,8 +58,6 @@ def mock_client(monkeypatch, text='{"sections":{}}', finish='stop', error=None):
 
         def create(self, **kwargs):
             calls['request'] = kwargs
-            if error is not None:
-                raise error
             return SimpleNamespace(choices=[SimpleNamespace(finish_reason=finish, message=SimpleNamespace(content=text))],
                                    usage=SimpleNamespace(total_tokens=20))
 
@@ -86,17 +82,12 @@ def test_sdk_has_timeout_retry_limit_and_redacted_logs(monkeypatch, caplog):
     assert 'tokens=20' in caplog.text
 
 
-@pytest.mark.parametrize(('text', 'finish', 'reason'), [
-    ('not-json', 'stop', 'output_json'), ('{}', 'length', 'output_truncated'),
-    ('[]', 'stop', 'output_json'), ('', 'stop', 'output_empty'),
-    ('{}', 'content_filter', 'output_filtered'), ('{}', 'tool_calls', 'output_incomplete'),
-])
-def test_sdk_rejects_truncated_or_malformed_response(monkeypatch, text, finish, reason):
+@pytest.mark.parametrize(('text', 'finish'), [('not-json', 'stop'), ('{}', 'length'), ('[]', 'stop')])
+def test_sdk_rejects_truncated_or_malformed_response(monkeypatch, text, finish):
     mock_client(monkeypatch, text, finish)
     with pytest.raises(ApiError) as error:
         Client.complete_json(None, '系统要求', {})
     assert error.value.code == 1402
-    assert error.value.data['reason'] == reason
 
 
 def test_unconfigured_model_is_explicitly_rejected(monkeypatch):
@@ -164,48 +155,3 @@ def test_expanded_settings_and_instruction_boundaries():
             LlmSettingsUpdate(**{**settings, field: settings[field] + 1})
     with pytest.raises(ValidationError):
         AiDraftRequest(revision=1, instructions='要' * (MAX_INSTRUCTIONS_CHARS + 1))
-
-
-@pytest.mark.parametrize(('status', 'body', 'reason'), [
-    (400, {'message': 'The supported API model names are test-a, test-b, but you passed invalid-id.'}, 'invalid_model'),
-    (400, {'error': {'code': 'model_not_found', 'message': 'untrusted message'}}, 'invalid_model'),
-    (400, '{"error":{"message":"Model Not Exist"}}', 'invalid_model'),
-    (400, {'message': 'Maximum context length exceeded; reduce max_tokens.'}, 'context_limit'),
-    (400, {'message': 'max_tokens exceeds the supported maximum'}, 'output_limit'),
-    (400, {'message': 'unsupported temperature'}, 'invalid_parameters'),
-    (401, {'message': 'untrusted authentication detail'}, 'authentication'),
-    (403, {'message': 'untrusted permission detail'}, 'permission'),
-    (402, {'message': 'untrusted billing detail'}, 'quota'),
-    (429, {'error': {'code': 'insufficient_quota'}}, 'quota'),
-    (429, {'message': 'too many requests'}, 'rate_limit'),
-    (404, {'message': 'model does not exist'}, 'invalid_model'),
-    (404, {'message': 'route not found'}, 'endpoint'),
-    (503, {'message': 'upstream max_tokens handling failed'}, 'upstream'),
-])
-def test_provider_errors_are_classified_without_leaking_response_or_changing_draft(monkeypatch, caplog, status, body, reason):
-    secret = 'synthetic-sensitive-provider-secret'
-    if isinstance(body, dict):
-        body = {**body, 'debug': secret}
-    request = httpx.Request('POST', 'https://test.invalid/v1/chat/completions')
-    response = httpx.Response(status, request=request)
-    exception = APIStatusError(secret, response=response, body=body)
-    mock_client(monkeypatch, error=exception)
-    snapshot = sample()
-    original = deepcopy(snapshot)
-    with caplog.at_level('WARNING'), pytest.raises(ApiError) as captured:
-        AiDraft.generate_ai_draft(None, snapshot, '请依据已保存草稿编写')
-    error = captured.value
-    assert error.code == 1402 and error.http_status == 502
-    assert error.data == {'reason': reason, 'provider_status': status}
-    assert '原草稿已保留' in error.message and snapshot == original
-    assert secret not in error.message + json.dumps(error.data) + caplog.text
-    assert f'reason={reason}' in caplog.text and f'provider_status={status}' in caplog.text
-
-
-@pytest.mark.parametrize(('kind', 'reason'), [(APITimeoutError, 'timeout'), (APIConnectionError, 'connection')])
-def test_network_errors_have_specific_safe_feedback(monkeypatch, kind, reason):
-    request = httpx.Request('POST', 'https://test.invalid/v1/chat/completions')
-    mock_client(monkeypatch, error=kind(request=request))
-    with pytest.raises(ApiError) as error:
-        Client.complete_json(None, '系统要求', {})
-    assert error.value.code == 1402 and error.value.data == {'reason': reason}

@@ -38,6 +38,7 @@ def main() -> int:
     from App.Models.DocumentReview import DocumentReview
     from App.Models.AuditLog import AuditLog
     from App.Models.DocumentDraft import DocumentDraft
+    from App.Models.ManualSuite import ManualSuite
     from App.Models.LlmConfig import LlmConfig
     from App.Utils.Security import hash_password
 
@@ -59,6 +60,8 @@ def main() -> int:
     migrate()
     from MigrateDocumentDrafts import migrate as migrate_drafts
     migrate_drafts()
+    from MigrateManualSuites import migrate as migrate_suites
+    migrate_suites()
 
     node = shutil.which('node')
     if not node:
@@ -67,6 +70,7 @@ def main() -> int:
     password = secrets.token_urlsafe(24)
     other_email = f'e2e-other-{secrets.token_hex(6)}@example.com'
     other_password = secrets.token_urlsafe(24)
+    registration_prefix = f'reg-{secrets.token_hex(8)}'
     with session_scope() as db:
         llm_row = db.execute(select(LlmConfig).where(LlmConfig.name == 'default')).scalar_one_or_none()
         llm_backup = {column.name: getattr(llm_row, column.name) for column in LlmConfig.__table__.columns} if llm_row else None
@@ -78,7 +82,8 @@ def main() -> int:
         user_id = user.id
         user_ids = [user.id, other.id]
     env = {**os.environ, 'E2E_EMAIL': email, 'E2E_PASSWORD': password, 'E2E_OTHER_EMAIL': other_email,
-           'E2E_OTHER_PASSWORD': other_password, 'E2E_PYTHON': sys.executable}
+           'E2E_OTHER_PASSWORD': other_password, 'E2E_PYTHON': sys.executable,
+           'E2E_REGISTRATION_PREFIX': registration_prefix}
     processes: list[subprocess.Popen] = []
     log_dir = ROOT / '.local' / 'E2eLogs'
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -115,6 +120,8 @@ def main() -> int:
         for output in logs:
             output.close()
         with session_scope() as db:
+            registered_ids = db.execute(select(User.id).where(User.email.like(registration_prefix + '-%@example.com'))).scalars().all()
+            user_ids.extend(registered_ids)
             llm_row = db.execute(select(LlmConfig).where(LlmConfig.name == 'default')).scalar_one_or_none()
             if llm_row and llm_row.updated_by in user_ids:
                 if llm_backup:
@@ -128,6 +135,7 @@ def main() -> int:
             db.execute(delete(ValidationRun).where(ValidationRun.created_by.in_(user_ids)))
             db.execute(delete(DocumentReview).where(DocumentReview.created_by.in_(user_ids)))
             db.execute(delete(DocumentDraft).where(DocumentDraft.created_by.in_(user_ids)))
+            db.execute(delete(ManualSuite).where(ManualSuite.created_by.in_(user_ids)))
             db.execute(delete(AuditLog).where(AuditLog.user_id.in_(user_ids)))
             names = db.execute(select(UploadedFile.stored_name).where(UploadedFile.uploaded_by.in_(user_ids))).scalars().all()
             db.execute(delete(UploadedFile).where(UploadedFile.uploaded_by.in_(user_ids)))

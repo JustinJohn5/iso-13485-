@@ -2,12 +2,15 @@ import './style.css';
 import './document-control.css';
 import { api, type DocumentType, type TypeDetection, type User, type ValidationResult } from './Api';
 import { renderResult } from './Components/Results';
+import { AuthenticationPage } from './Components/Authentication';
 import { escape } from './Utils/Html';
 import { bindReviewEvents, renderDocumentReview, renderMetadata } from './Components/DocumentReview';
 import type { ControlMetadata, DocumentReview, MetadataChanges } from './Types/DocumentControl';
 import { AuthoringWorkspace } from './Components/Authoring';
 import { LlmSettingsPage } from './Components/LlmSettings';
 import { bindAuditQuestions, renderAuditQuestions } from './Components/AuditQuestions';
+import { ManualSuitesPage } from './Components/ManualSuites';
+import { RuleHandbookPage } from './Components/RuleHandbook';
 
 type QueueItem = { file: File; type: string; uid?: string; error?: string; detection?: TypeDetection; warnings?: string[]; metadata?: ControlMetadata; changes?: MetadataChanges };
 const root = document.querySelector<HTMLDivElement>('#app')!;
@@ -21,33 +24,10 @@ let documentReview: DocumentReview | null = null;
 let asOfDate = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 
 function renderLogin(message = ''): void {
-  root.innerHTML = `
-    <main class="login-page">
-      <section class="login-panel">
-        <div class="brand-mark">Q</div>
-        <p class="eyebrow">QUALITY SYSTEM REVIEW</p>
-        <h1>ISO 13485<br>文件预筛平台</h1>
-        <p class="login-copy">上传质量体系文件，查看文本规则预筛结果与待核实事项。</p>
-        <form id="login-form" class="login-form" data-testid="login-form">
-          <label>邮箱<input data-testid="login-email" name="email" type="email" autocomplete="username" required placeholder="name@company.com"></label>
-          <label>密码<input data-testid="login-password" name="password" type="password" autocomplete="current-password" required></label>
-          <p class="form-error" role="alert">${escape(message)}</p>
-          <button data-testid="login-submit" class="button button-primary" type="submit">登录工作区 <span aria-hidden="true">→</span></button>
-        </form>
-        <p class="login-foot">仅授权账号可访问文件与校验记录</p>
-      </section>
-      <aside class="login-aside"><div class="aside-rule"></div><p>DOCUMENT<br>CONTROL</p><span>受控文件的<br>结构化预筛</span><small>RULESET · 1.0</small></aside>
-    </main>`;
-  root.querySelector<HTMLFormElement>('#login-form')!.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const data = new FormData(event.currentTarget as HTMLFormElement);
-    try {
-      user = await api.login(String(data.get('email')), String(data.get('password')));
-      await loadWorkspace();
-    } catch (error) {
-      renderLogin(error instanceof Error ? error.message : '登录失败');
-    }
-  });
+  new AuthenticationPage(root, async (authenticated) => {
+    user = authenticated;
+    await loadWorkspace();
+  }).showLogin(message);
 }
 
 function formatSize(bytes: number): string {
@@ -71,8 +51,9 @@ function render(): void {
         <div class="side-label">工作区</div>
         <button data-testid="precheck-nav" class="nav-item active"><span class="nav-symbol">▦</span>文件预筛</button>
         <button data-testid="templates-nav" class="nav-item" id="templates-nav"><span class="nav-symbol">▤</span>模板与编写</button>
+        <button data-testid="suites-nav" class="nav-item" id="suites-nav"><span class="nav-symbol">▣</span>整套手册</button>
         ${user.role === 'admin' ? '<button data-testid="llm-settings-nav" class="nav-item" id="llm-settings-nav"><span class="nav-symbol">⚙</span>模型配置</button>' : ''}
-        <button data-testid="rules-nav" class="nav-item" id="rules-nav"><span class="nav-symbol">≡</span>规则说明</button>
+        <button data-testid="rules-nav" class="nav-item" id="rules-nav"><span class="nav-symbol">≡</span>规则手册</button>
         <div class="sidebar-bottom"><div class="standard-tag"><span class="status-dot"></span><span>规则包已就绪<small>ISO 13485:2016 · v1.0.1</small></span></div><button ${busy ? 'disabled' : ''} data-testid="logout" id="logout" class="logout">退出登录</button></div>
       </aside>
       <main class="main-content">
@@ -105,6 +86,9 @@ function render(): void {
 }
 
 function bindEvents(): void {
+  root.querySelector('#suites-nav')?.addEventListener('click', () => {
+    if (!busy) void new ManualSuitesPage(root, render).open();
+  });
   if (result) bindAuditQuestions(root, result);
   root.querySelector('#templates-nav')?.addEventListener('click', () => {
     if (!busy) void new AuthoringWorkspace(root, render, user?.role === 'admin').open();
@@ -145,7 +129,7 @@ function bindEvents(): void {
     await api.logout().catch(() => undefined); user = null; queue = []; result = null; documentReview = null; renderLogin();
   });
   root.querySelectorAll<HTMLButtonElement>('#show-rules, #rules-nav').forEach((button) => button.addEventListener('click', () => {
-    document.querySelector('#rule-note')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (!busy) void new RuleHandbookPage(root, render).open();
   }));
   root.querySelector('#notice-link')?.addEventListener('click', () => document.querySelector('#rule-note')?.scrollIntoView({ behavior: 'smooth' }));
   root.querySelector('#reset-result')?.addEventListener('click', () => { queue = []; result = null; documentReview = null; notice = ''; render(); });

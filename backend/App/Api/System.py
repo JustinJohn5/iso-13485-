@@ -1,6 +1,9 @@
 """健康检查与规则包目录。"""
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+
+from App.Api.Dependencies import current_user
+from App.Models.User import User
 
 from App.Config.Settings import get_settings
 from App.Services.Rules.RuleSetLoader import RuleSetLoader
@@ -31,3 +34,8 @@ def rule_sets():
 def document_types():
     rule_set = rule_loader().get()
     return success([item.model_dump() for item in rule_set.document_types])
+
+
+@router.get('/rule-sets/{rule_set_id}')
+def rule_handbook(rule_set_id: str, user: User = Depends(current_user)):
+    return success(rule_loader().get(rule_set_id).model_dump())

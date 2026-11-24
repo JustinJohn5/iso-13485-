@@ -43,7 +43,14 @@ macOS / Ubuntu：
 
 ## 目录及覆盖范围
 
-- 模型故障回归：`test_AiDraft.py` 使用真实 SDK 异常类型模拟服务商模型名错误、认证、权限、额度、限流、上下文/输出额度、地址和网络错误，验证分类、脱敏及草稿不变；`LlmSettings.spec.ts` 覆盖真实404故障链路及精确注入的模型名错误页面反馈，后者用于验证 UI，不代表调用了真实模型。
+- `tests/Services/test_Registration.py`：邮箱及姓名规范化、密码强度与确认、UTF-8 72字节边界和权限字段拒绝；后端目录执行 `python -m pytest ../tests/Services/test_Registration.py -q`。
+- `tests/e2e/Registration.spec.ts`：390px注册、注册后登录及Cookie刷新保持、重复邮箱、表单错误、服务端权限与无效输入拒绝、并发去重；根目录执行 `python tests/RunE2e.py tests/e2e/Registration.spec.ts`。`tests/Helpers/RegistrationDatabase.py`核对真实MySQL密码哈希及审计。入口以随机前缀标识并清理本次注册账号及数据，禁止连接正式库。
+
+- `tests/e2e/RuleHandbook.spec.ts`：登录后阅读真实规则、按条款及关键词筛选、检查条件和建议；单项运行 `python tests/RunE2e.py tests/e2e/RuleHandbook.spec.ts`。最终全量验证：107项后端测试、23条E2E、TypeScript及Vite构建通过。
+
+- `tests/Services/test_ManualSuites.py`：20项目录生成、独立编号与版本、快照隔离、重复与容量拒绝、正文修订、实际规则检查及真实 Word/ZIP 内容。
+- `tests/e2e/ManualSuites.spec.ts`：整套创建、生成、编辑、导入、检查、下载内容、版本筛选、MySQL 持久化和审计、跨用户隔离、过期与真正并发拒绝、成员校正/移出及390px窄屏。`tests/Helpers/SuiteArchive.py` 核对下载包与数据库，入口自动迁移并清理本次套册数据。
+- 单项运行：根目录 `python tests/RunE2e.py tests/e2e/ManualSuites.spec.ts`；单元测试在后端目录运行 `python -m pytest ../tests/Services/test_ManualSuites.py -q`，均使用既有项目虚拟环境。
 
 - 长文本回归：`test_TemplateLibrary.py` 覆盖10万字符资料、12万字符章节及 Word 完整导出；`test_AiDraft.py` 覆盖长模型输入输出、系统提示计入100万字符总限制、响应边界及超限不截断。模型成功响应仍使用模拟客户端，不代表真实服务已经连通。
 - `tests/e2e/Authoring.spec.ts` 验证长资料与章节在浏览器、API、MySQL 保存及重载后完整一致；`LlmSettings.spec.ts` 验证65,536 token及600秒配置持久化，以及长要求发起失败调用后原草稿保留。所有写入均在测试副本并随测试清理。

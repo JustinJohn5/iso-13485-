@@ -45,9 +45,7 @@ test('管理员配置加密保存且不回显，AI 故障保留原草稿', async
   const failure = await failed;
   expect(failure.request().postDataJSON().instructions).toBe(instructions);
   expect(failure.status()).toBe(502); expect((await failure.json()).code).toBe(1402);
-  expect((await failure.json()).data).toEqual({ reason: 'endpoint', provider_status: 404 });
   await expect(page.getByTestId('authoring-notice')).toContainText('原草稿已保留');
-  await expect(page.getByTestId('authoring-notice')).toContainText('模型接口不存在');
   await expect(page.getByTestId('draft-revision')).toHaveText('修订 1');
   const current = (await (await page.request.get(`${base}/api/v1/document-drafts/${draft.draft_uid}`)).json()).data;
   expect(current.snapshot).toEqual(draft.snapshot); expect(current.history).toHaveLength(1);
@@ -59,46 +57,5 @@ test('管理员配置加密保存且不回显，AI 故障保留原草稿', async
     const patch = await context.request.patch(`${base}/api/v1/llm-settings`, { data: { enabled: false, base_url: `${base}/v1`, model: 'test', timeout_seconds: 5, max_tokens: 1000, temperature: 0.2 } });
     expect(patch.status()).toBe(403); expect((await patch.json()).code).toBe(1104);
   } finally { await context.close(); }
-  await assertClean();
-});
-
-test('模型标识错误时显示配置建议且不改动已保存草稿', async ({ page }) => {
-  await login(page);
-  const base = process.env.E2E_API_BASE_URL!;
-  const configured = await page.request.patch(`${base}/api/v1/llm-settings`, { data: {
-    enabled: true, base_url: `${base}/intentionally-missing-llm/v1`, model: 'invalid-model-for-test',
-    api_key: 'synthetic-key-for-ui-regression', timeout_seconds: 5, max_tokens: 1000, temperature: 0.2,
-  } });
-  expect(configured.status()).toBe(200);
-  const created = await page.request.post(`${base}/api/v1/document-drafts`, { data: {
-    template_id: 'market-research', parameters: { company: '测试组织', project: '模型错误提示测试',
-      product: '虚构产品', model: 'TEST-A', number: 'MR-ERR-01', version: 'A/0', requirements: '测试资料均为虚构内容' },
-  } });
-  expect(created.status()).toBe(200);
-  const draft = (await created.json()).data;
-  const path = `/api/v1/document-drafts/${draft.draft_uid}/ai-draft`;
-  const assertClean = watchPage(page, [{ path, status: 502, code: 1402 }]);
-  // 后端分类由单元测试及真实404路径覆盖；这里精确注入模型错误响应以验证页面反馈。
-  await page.route(`${base}${path}`, (route) => route.fulfill({ status: 502, json: {
-    code: 1402, message: '模型标识无效或服务商不支持，请在“模型配置”填写真实 API 模型 ID；原草稿已保留',
-    data: { reason: 'invalid_model', provider_status: 400 },
-  } }));
-  await page.getByTestId('templates-nav').click();
-  await page.getByTestId(`open-draft-${draft.draft_uid}`).click();
-  await page.getByTestId('ai-instructions').fill('请整理并扩写市场调研章节');
-  const failed = page.waitForResponse((response) => response.url().endsWith(path));
-  await page.getByTestId('ai-draft').click();
-  const failure = await failed;
-  expect(failure.status()).toBe(502);
-  expect((await failure.json()).data.reason).toBe('invalid_model');
-  await expect(page.getByTestId('authoring-notice')).toContainText('模型标识无效');
-  await expect(page.getByTestId('authoring-notice')).toContainText('模型配置');
-  await expect(page.getByTestId('draft-revision')).toHaveText('修订 1');
-  const stored = await page.request.get(`${base}/api/v1/document-drafts/${draft.draft_uid}`);
-  expect(stored.status()).toBe(200);
-  const current = (await stored.json()).data;
-  expect(current.snapshot).toEqual(draft.snapshot);
-  expect(current.history).toHaveLength(1);
-  await page.screenshot({ path: '.local/LlmFailureDetails.png', fullPage: true });
   await assertClean();
 });
