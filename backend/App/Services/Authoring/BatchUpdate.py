@@ -4,7 +4,7 @@ from sqlalchemy import select
 from App.Models.AuditLog import AuditLog
 from App.Models.DocumentDraft import DocumentDraft
 from App.Services.Authoring.DraftStore import history_entry
-from App.Services.Authoring.TemplateLibrary import build_snapshot
+from App.Services.Authoring.TemplateLibrary import regenerate_snapshot
 from App.Utils.Errors import ApiError
 
 
@@ -26,7 +26,7 @@ def build_batch_plan(rows, payload, user):
             continue
         if len(row.history) >= 50:
             raise ApiError(1001, '所选草稿中有修订达到50次的文件，请先新建草稿')
-        snapshot = build_snapshot(row.snapshot['template_id'], {**row.snapshot['parameters'], **payload.parameters})
+        snapshot = regenerate_snapshot(row.snapshot, {**row.snapshot['parameters'], **payload.parameters})
         plan.append({'row': row, 'snapshot': snapshot, 'changes': changes})
     if not plan:
         raise ApiError(1001, '参数没有变化，无需重新生成草稿')

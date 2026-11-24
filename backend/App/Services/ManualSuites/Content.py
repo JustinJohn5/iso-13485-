@@ -5,7 +5,8 @@ import re
 from uuid import uuid4
 
 from App.Constants.AuthoringLimits import MAX_REQUIREMENTS_CHARS
-from App.Services.Authoring.TemplateLibrary import edit_sections
+from App.Services.Authoring.TemplateLibrary import edit_sections, rewrite_parameter_text
+from App.Services.Authoring.GenerationRules import enrich_snapshot, legacy_basis
 from App.Services.DocumentControl.Metadata import extract_metadata
 from App.Services.ManualSuites.Catalog import catalog, suite_template
 from App.Utils.Errors import ApiError
@@ -51,6 +52,7 @@ def generate_items(existing: list[dict], keys: list[str], parameters: dict, vers
         sections = [{**row, 'body': row['body'].format_map(values)} for row in template['sections']]
         snapshot = dict(template_id=key, template_version=template['version'], title=template['title'],
                         parameters=values, sections=sections, origin='template', status='draft')
+        snapshot = enrich_snapshot(snapshot)
         text = snapshot_text(snapshot)
         result.append(dict(id=str(uuid4()), title=entry['title'], number=entry['number'], file_version=version,
                            catalog_key=key, document_type=entry['document_type'], origin='generated',
@@ -71,7 +73,8 @@ def import_items(existing: list[dict], files: list) -> list[dict]:
         result.append(dict(id=str(uuid4()), title=source.original_name, number=metadata['number'],
                            file_version=metadata['revision'], catalog_key=key, document_type=source.document_type,
                            origin='imported', text=source.extracted_text, sha256=source.sha256,
-                           file_uid=source.file_uid, stored_name=source.stored_name, size_bytes=source.size_bytes))
+                           file_uid=source.file_uid, stored_name=source.stored_name, size_bytes=source.size_bytes,
+                           text_status=getattr(source, 'text_status', 'ok')))
     return check_capacity(result)
 
 
@@ -96,12 +99,11 @@ def revise_item(items: list[dict], item_id: str, catalog_key: str, file_version:
         if previous_version != row['file_version']:
             values = row['snapshot']['parameters']
             previous_values = {**values, 'version': previous_version}
-            originals = {item['id']: item for item in suite_template(row['snapshot']['template_id'])['sections']}
             for section in row['snapshot']['sections']:
-                template = originals[section['id']]['body']
-                if section['body'] == template.format_map(previous_values):
-                    section['body'] = template.format_map(values)
+                section['body'] = rewrite_parameter_text(section['body'], previous_values, values)
         row['revision'] = row.get('revision', 1) + 1
+        row['snapshot'].setdefault('requirements_basis', legacy_basis(row['snapshot']))
+        row['snapshot'] = enrich_snapshot(row['snapshot'])
         row['text'] = snapshot_text(row['snapshot'])
         row['sha256'] = sha256(row['text'].encode()).hexdigest()
     return check_capacity(result)

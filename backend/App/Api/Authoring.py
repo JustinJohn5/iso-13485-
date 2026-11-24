@@ -14,7 +14,7 @@ from App.Models.DocumentDraft import DocumentDraft
 from App.Models.User import User
 from App.Schemas.DocumentDraft import DraftCreate, DraftUpdate
 from App.Services.Authoring.DraftStore import accessible_draft, draft_response, history_entry, save_revision
-from App.Services.Authoring.TemplateLibrary import build_snapshot, edit_sections, search_templates
+from App.Services.Authoring.TemplateLibrary import build_snapshot, edit_sections, regenerate_snapshot, search_templates
 from App.Services.Authoring.WordExport import export_word
 from App.Utils.Errors import ApiError
 from App.Utils.Response import success
@@ -59,7 +59,7 @@ def revise(uid: str, payload: DraftUpdate, db: Session = Depends(get_db), user: 
     row = accessible_draft(db, user, uid)
     if (payload.parameters is None) == (payload.sections is None):
         raise ApiError(1001, '每次只允许更新参数或正文中的一项')
-    snapshot = (build_snapshot(row.snapshot['template_id'], payload.parameters) if payload.parameters is not None
+    snapshot = (regenerate_snapshot(row.snapshot, payload.parameters) if payload.parameters is not None
                 else edit_sections(row.snapshot, payload.sections))
     return success(save_revision(db, row, payload.revision, snapshot, user, payload.reason))
 

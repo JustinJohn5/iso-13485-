@@ -16,7 +16,7 @@ assert '更改历史' in text and '成品检验规程目录' in text
 assert document.sections[0].page_width.twips == 11907
 assert len(document.sections[0].header.tables) == 1
 assert document.tables[0].rows[1].cells[1].text == f'草稿 r{revision}'
-assert f'编写修订 / 模板版本：{revision} / 1.0' in text
+assert f'编写修订 / 模板版本：{revision} / 2.0' in text
 if revision == '3':
     assert '已核对技术要求及引用文件清单' in text
 else:

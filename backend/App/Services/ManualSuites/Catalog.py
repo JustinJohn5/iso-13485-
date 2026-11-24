@@ -2,6 +2,7 @@
 from copy import deepcopy
 
 from App.Services.Authoring.TemplateLibrary import COMMON_FIELDS, get_template
+from App.Services.Authoring.GenerationRules import requirement_text
 
 
 # 编号保持独立；目录描述适用内容，是否适用仍由组织核对。
@@ -82,8 +83,19 @@ def suite_template(key: str) -> dict:
         return get_template(key)
     _, title, _, _, category, sections = found
     prefix = '组织：{company}\n项目：{project}\n产品：{product}（{model}）\n'
-    return deepcopy(dict(id=key, title=title, category=category, version='1.0',
+    result = deepcopy(dict(id=key, title=title, category=category, version='2.0',
                          fields=COMMON_FIELDS + [dict(key='requirements', label='已知输入')],
                          sections=[dict(id=f's{i}', title=heading, body=prefix +
                                         ('已知输入：{requirements}\n' if i == 1 else '') + '待填写并核实：' + body)
                                    for i, (heading, body) in enumerate(sections, 1)]))
+    result['sections'][0]['body'] += ('\n流程责任角色应在活动启动或变更时核对适用范围、输入及受控依据，'
+        '按批准准则组织执行，保留对象、版本、日期、执行角色、结果与附件关联；'
+        '依据缺失、超限或版本冲突时暂停受影响活动，提交授权角色评审并跟踪处理。'
+        '\n待确认：组织活动、职责权限、引用编号版本、实施方法及接收准则；责任角色：待确认；所需依据：组织事实与受控文件。')
+    result['sections'][-1]['body'] += '\n' + requirement_text(key)
+    if key == 'record-control':
+        result['sections'][-1]['body'] += ('\n保存安排须同时识别组织确定的器械寿命期、从产品放行日期起两年及适用法规，'
+            '不同起算事件先核对可比到期日，特殊法规关系交人工确认；依据未明不得确定销毁日期。')
+    if key == 'record-forms':
+        result['sections'][-1]['body'] += '\n日期：____；对象：____；执行人：____；实际结果：待填写；复核：____；附件索引：____。'
+    return result

@@ -4,7 +4,12 @@ export interface Template {
   sections: Array<{ id: string; title: string; body: string }>;
 }
 
-export interface DraftSnapshot {
+export interface GenerationMetadata {
+  requirements_basis?: { version: string; source?: unknown; legacy?: boolean; requirements: Array<{ clause: string; title: string; generation?: unknown; source?: unknown; conditions?: string[]; uncertainty?: unknown }> };
+  generation_review?: { pending_count: number; pending: unknown[]; manual_review: unknown[]; reference_gaps?: unknown[]; missing_requirements?: unknown[]; boundary?: string };
+}
+
+export interface DraftSnapshot extends GenerationMetadata {
   template_id: string; template_version: string; title: string; parameters: Record<string, string>;
   sections: Array<{ id: string; title: string; body: string }>; origin: string; status: string;
 }

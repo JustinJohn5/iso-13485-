@@ -48,3 +48,11 @@ def test_batch_rejects_per_document_identifiers_and_no_changes():
     with pytest.raises(ApiError) as error:
         build_batch_plan([row('a'), row('b')], data, SimpleNamespace(id=1, role='auditor'))
     assert error.value.code == 1001
+
+
+def test_batch_regeneration_preserves_frozen_rule_basis():
+    rows = [row('a'), row('b')]
+    rows[0].snapshot['requirements_basis'] = {'version': '历史依据', 'requirements': []}
+    plan = build_batch_plan(rows, payload(), SimpleNamespace(id=1, role='auditor'))
+    assert plan[0]['snapshot']['requirements_basis'] == rows[0].snapshot['requirements_basis']
+    assert plan[0]['snapshot']['generation_review']['basis_version'] == '历史依据'

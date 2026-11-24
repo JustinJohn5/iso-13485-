@@ -32,6 +32,30 @@ def test_ai_uses_validated_sections_and_preserves_parameters_and_original(monkey
     assert snapshot == original
 
 
+@pytest.mark.parametrize('body', ['产品：其他产品；型号：TYPE-B。', '其他产品（TYPE-B）的全部检验已经完成。'])
+def test_ai_obvious_parameter_conflict_is_rejected_without_mutation(body, monkeypatch):
+    snapshot = sample()
+    original = deepcopy(snapshot)
+    sections = {row['id']: body for row in snapshot['sections']}
+    monkeypatch.setattr(AiDraft, 'complete_json', lambda *args: ({'sections': sections}, 'test-model'))
+    with pytest.raises(ApiError) as error:
+        AiDraft.generate_ai_draft(None, snapshot, '细化草稿')
+    assert error.value.code == 1402 and snapshot == original
+
+
+def test_ai_specific_claims_are_individually_flagged_for_source_verification(monkeypatch):
+    snapshot = sample()
+    original = deepcopy(snapshot)
+    sections = {row['id']: '2026-01-01由张三签字。全部样本均达到要求。验收限值99.9%。依据ISO 99999第1条执行。'
+                for row in snapshot['sections']}
+    monkeypatch.setattr(AiDraft, 'complete_json', lambda *args: ({'sections': sections}, 'test-model'))
+    result = AiDraft.generate_ai_draft(None, snapshot, '细化草稿')
+    manual = result['generation_review']['manual_review']
+    for quoted in ['2026-01-01', '张三签字', '全部样本均达到要求', '99.9%', 'ISO 99999']:
+        assert any(quoted in row.get('quote', '') and row.get('section_id') for row in manual)
+    assert snapshot == original
+
+
 @pytest.mark.parametrize('output', [{}, {'sections': []}, {'sections': {'s1': '只有一个章节'}},
                                     {'sections': {f's{i}': 123 for i in range(1, 5)}},
                                     {'sections': {f's{i}': '' for i in range(1, 5)}}])

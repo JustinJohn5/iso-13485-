@@ -63,7 +63,7 @@ def test_change_record_keeps_source_columns_without_inventing_approval():
     assert len(table.rows) == 26
     assert table.rows[1].cells[0].text == 'B/2'
     assert table.rows[1].cells[1].text == '草稿 r3'
-    assert '模板 1.0' in table.rows[1].cells[2].text
+    assert '模板 2.0' in table.rows[1].cells[2].text
     assert table.rows[1].cells[4].text == '待批准'
     assert '当前导出快照' in table.rows[1].cells[2].text
 

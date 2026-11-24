@@ -6,6 +6,7 @@ import { llmApi } from '../Api/Llm';
 import { LlmSettingsPage } from './LlmSettings';
 import { DraftBatchPanel } from './DraftBatch';
 import { AUTHORING_LIMITS } from '../Constants/AuthoringLimits';
+import { renderGenerationReview } from './GenerationReview';
 
 export class AuthoringWorkspace {
   private templates: Template[] = [];
@@ -60,7 +61,7 @@ export class AuthoringWorkspace {
     this.root.innerHTML = `<div class="app-shell">
       <aside class="sidebar"><a class="brand" href="#"><span class="brand-mark">Q</span><span><b>QMS</b><small>DOCUMENT AUTHORING</small></span></a>
         <div class="side-label">工作区</div><button class="nav-item" data-testid="precheck-nav" id="back-precheck" ${this.busy ? 'disabled' : ''}>▦ 文件预筛</button>
-        <button class="nav-item active" data-testid="templates-nav">▤ 模板与编写</button><div class="sidebar-bottom"><p class="control-note">示例模板库 v1.0<br>生成、复核、修订、导出</p></div></aside>
+        <button class="nav-item active" data-testid="templates-nav">▤ 模板与编写</button><div class="sidebar-bottom"><p class="control-note">项目模板库<br>生成、复核、修订、导出</p></div></aside>
       <main class="main-content"><header class="topbar"><div class="breadcrumb">工作区 <span>/</span><b>模板与编写</b></div><span>草稿工作区</span></header>
         <div class="content-wrap authoring-wrap"><section class="page-heading"><div><p class="eyebrow">DOCUMENT AUTHORING</p><h1>模板与编写</h1><p>查找模板，填写项目参数，生成并修订技术文件。</p></div></section>
           <div class="notice-bar"><span class="notice-icon">i</span><p>模板为项目自有示例；生成文件保留草稿状态，批准、生效、检验限值及事实数据须人工核实。</p></div>
@@ -79,6 +80,7 @@ export class AuthoringWorkspace {
                 <button class="button button-primary" type="submit" data-testid="generate-draft" ${!template ? 'disabled' : ''}>${this.draft ? '更新参数并重新生成' : '生成文档草稿'}</button></form>
               ${this.draft ? `<div class="draft-preview" data-testid="draft-preview"><div class="section-title"><h2>正文预览与修改</h2><span data-testid="draft-revision">修订 ${this.draft.revision}</span></div>
                 <p class="control-note" data-testid="draft-origin">来源：${this.draft.snapshot.origin === 'ai' ? 'AI 辅助编写' : this.draft.snapshot.origin === 'manual' ? '人工修订' : '参数化模板'} · 待人工复核</p>
+                ${renderGenerationReview(this.draft.snapshot)}
                 <div class="ai-draft-panel"><h3>AI 辅助编写</h3><p class="control-note" data-testid="ai-status">${this.aiReady ? '模型已启用；将向配置的服务发送已保存草稿和编写要求，请确认资料允许发送。AI 会覆盖当前章节并保存为新修订。' : '模型尚未启用，可先使用模板和人工编辑。'}所有生成内容均需人工复核。</p>
                   ${this.isAdmin ? '<button type="button" class="text-button" id="open-llm-settings" data-testid="open-llm-settings">管理模型配置</button>' : ''}
                   <label class="section-editor">编写要求（最多3万字符）<textarea rows="3" maxlength="${AUTHORING_LIMITS.instructions}" data-testid="ai-instructions" id="ai-instructions" placeholder="例如：细化检验步骤，缺失限值标记待确认">${escape(this.instructions)}</textarea></label>

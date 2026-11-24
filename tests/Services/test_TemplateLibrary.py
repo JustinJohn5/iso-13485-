@@ -65,7 +65,7 @@ def test_word_has_real_document_structure_and_draft_marking():
     assert '成品检验规程' in text and '草稿' in text and '不作为产品放行' in text
     assert 'MODEL-A' in text
     assert len(document.tables) == 1
-    assert '3 / 1.0' in text
+    assert '3 / 2.0' in text
     assert document.tables[0].rows[1].cells[1].text == '草稿 r3'
 
 
