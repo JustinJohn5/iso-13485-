@@ -15,6 +15,7 @@
 python -m pytest ../tests/Services -q
 python -m pytest ../tests/Services/test_DocumentClassifier.py -q
 python -m pytest ../tests/Services/test_RuleEngine.py -q
+python -m pytest ../tests/Services/test_RequirementCatalog.py ../tests/Services/test_GenerationRules.py ../tests/Services/test_Prescreen.py -q
 ```
 
 在 `frontend` 目录执行 `npm run build -- --mode development`，读取既有 `.env.development` 并完成 TypeScript 检查和构建。正式构建使用 `npm run build`，需先准备 `.env.production`。不能因缺少构建环境配置而添加业务代码默认值。
@@ -41,7 +42,12 @@ macOS / Ubuntu：
 
 测试端口默认前端 5400、后端 8400，与本地 5300/8320、正式 5500/8500 分离；数据库按连接串实际端口访问独立测试库。测试结束（包括用例失败）会停止本次启动的服务，并批量清理本次账号、上传原件与预筛记录。强制杀死测试入口可能跳过清理，需检查 `.local/E2eLogs` 和测试进程归属再处理，不得盲目结束端口进程或清空测试库。
 
+Windows 若出现 Playwright 转换缓存的 `EPERM`，可在专用测试终端把 `TMP` 和 `TEMP` 指向项目 `.local` 内一个独立的可写子目录，再运行测试入口。
+
 ## 目录及覆盖范围
+
+- `test_RequirementCatalog.py` 核对 72 项条款和 20 项生成映射。`test_GenerationRules.py` 核对条款依据、自检和修订。`test_Prescreen.py` 覆盖条件、受控引用、否定表述、部分抽取、证据保留和覆盖率。
+- `tests/e2e/IsoRules.spec.ts` 验证待补证据、体系范围、不适用说明、生成自检以及套册上下文持久化。单独运行时将该路径传给 `tests/RunE2e.py`。
 
 - `tests/Services/test_Registration.py`：邮箱及姓名规范化、密码强度与确认、UTF-8 72字节边界和权限字段拒绝；后端目录执行 `python -m pytest ../tests/Services/test_Registration.py -q`。
 - `tests/e2e/Registration.spec.ts`：390px注册、注册后登录及Cookie刷新保持、重复邮箱、表单错误、服务端权限与无效输入拒绝、并发去重；根目录执行 `python tests/RunE2e.py tests/e2e/Registration.spec.ts`。`tests/Helpers/RegistrationDatabase.py`核对真实MySQL密码哈希及审计。入口以随机前缀标识并清理本次注册账号及数据，禁止连接正式库。
