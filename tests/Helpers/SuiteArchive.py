@@ -23,7 +23,9 @@ with session_scope() as db:
     row = db.execute(select(ManualSuite).join(User, User.id == ManualSuite.created_by).where(
         ManualSuite.suite_uid == sys.argv[1], User.email == os.environ['E2E_EMAIL'])).scalar_one()
     assert row.version == 'A/0' and row.item_count == 21 and len(row.items) == 21
-    assert row.inspection and row.inspection['rule_set']['version'] == '1.0.1'
+    current = row.inspection['current']
+    assert current['rule_set']['version'] == '2.0.0'
+    assert current['prescreen']['coverage']['denominator'] > 0
     assert '已核实范围' in row.items[0]['text']
     assert row.items[0]['file_version'] == 'B/1'
     assert row.items[-1]['file_version'] == 'B/2'
@@ -37,7 +39,7 @@ with session_scope() as db:
         assert 'EX-01' in archive.read(original).decode('utf-8')
         manifest = json.loads(archive.read('目录.json'))
         assert manifest['version'] == 'A/0' and len(manifest['items']) == 21
-        assert json.loads(archive.read('检查结果.json')) == row.inspection
+        assert json.loads(archive.read('检查结果.json')) == {**current, 'findings': current['prescreen']['items']}
         manual = next(name for name in names if name.endswith('质量手册.docx'))
         text = '\n'.join(p.text for p in Document(BytesIO(archive.read(manual))).paragraphs)
         assert '已核实范围' in text and 'MODEL-A' in text and 'B/1' in text

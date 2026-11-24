@@ -49,5 +49,7 @@ def extract_pdf(path: Path) -> TextResult:
             text = ""
         if text.strip():
             chunks.append(text)
+        elif not any(warning.startswith(f"第 {index + 1} 页") for warning in warnings):
+            warnings.append(f"第 {index + 1} 页未抽取到文本，请核对空白页、扫描内容或图片")
 
-    return TextResult(text="\n\n".join(chunks), page_count=total, warnings=warnings)
+    return TextResult(text="\n\n".join(chunks), page_count=total, warnings=warnings, incomplete=bool(warnings))

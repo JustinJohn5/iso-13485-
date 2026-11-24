@@ -1,5 +1,6 @@
 import { download, request } from '../Api';
-import type { CatalogEntry, ManualSuite, SuiteItem, SuiteList } from '../Types/ManualSuite';
+import type { CatalogEntry, ManualSuite, SuiteInspection, SuiteItem, SuiteList } from '../Types/ManualSuite';
+import type { PrescreenContext } from '../Types/Prescreen';
 
 const json = (method: string, body: unknown) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 const path = (uid: string) => `/api/v1/manual-suites/${encodeURIComponent(uid)}`;
@@ -13,6 +14,7 @@ export const suitesApi = {
   item: (suite: ManualSuite, id: string) => request<SuiteItem>(`${path(suite.suite_uid)}/items/${encodeURIComponent(id)}`),
   revise: (suite: ManualSuite, id: string, key: string, version: string, sections?: Record<string, string>, reason?: string) => request<ManualSuite>(`${path(suite.suite_uid)}/items/${encodeURIComponent(id)}`, json('PATCH', { revision: suite.revision, catalog_key: key, file_version: version, sections, reason })),
   remove: (suite: ManualSuite, id: string) => request<ManualSuite>(`${path(suite.suite_uid)}/items/${encodeURIComponent(id)}`, json('DELETE', { revision: suite.revision })),
-  inspect: (suite: ManualSuite, asOf: string) => request<ManualSuite>(`${path(suite.suite_uid)}/inspections`, json('POST', { revision: suite.revision, as_of_date: asOf })),
+  inspect: (suite: ManualSuite, asOf: string, context?: PrescreenContext) => request<ManualSuite>(`${path(suite.suite_uid)}/inspections`, json('POST', { revision: suite.revision, as_of_date: asOf, context })),
+  inspection: (suite: ManualSuite, revision: number) => request<SuiteInspection>(`${path(suite.suite_uid)}/inspections/${revision}`),
   download: (suite: ManualSuite) => download(`${path(suite.suite_uid)}/download`, `${suite.name}-${suite.version.replace(/[<>:"/\\|?*]/g, '-')}.zip`),
 };

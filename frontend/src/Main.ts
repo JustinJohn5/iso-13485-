@@ -11,8 +11,12 @@ import { LlmSettingsPage } from './Components/LlmSettings';
 import { bindAuditQuestions, renderAuditQuestions } from './Components/AuditQuestions';
 import { ManualSuitesPage } from './Components/ManualSuites';
 import { RuleHandbookPage } from './Components/RuleHandbook';
+import { bindPrescreenContext, createPrescreenContext, purposeSelect, renderPrescreenContext } from './Components/PrescreenContext';
+import type { DocumentPurpose } from './Types/Prescreen';
+import { handbookApi } from './Api/RuleHandbook';
+import type { RuleSetSummary } from './Types/RuleHandbook';
 
-type QueueItem = { file: File; type: string; uid?: string; error?: string; detection?: TypeDetection; warnings?: string[]; metadata?: ControlMetadata; changes?: MetadataChanges };
+type QueueItem = { file: File; type: string; purpose: DocumentPurpose; uid?: string; error?: string; detection?: TypeDetection; warnings?: string[]; metadata?: ControlMetadata; changes?: MetadataChanges };
 const root = document.querySelector<HTMLDivElement>('#app')!;
 let user: User | null = null;
 let types: DocumentType[] = [];
@@ -22,6 +26,8 @@ let busy = false;
 let notice = '';
 let documentReview: DocumentReview | null = null;
 let asOfDate = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+let context = createPrescreenContext(asOfDate);
+let ruleSet: RuleSetSummary | undefined;
 
 function renderLogin(message = ''): void {
   new AuthenticationPage(root, async (authenticated) => {
@@ -43,6 +49,7 @@ function render(): void {
       <div class="file-name"><strong title="${escape(item.file.name)}">${escape(item.file.name)}</strong><small>${formatSize(item.file.size)}${item.uid ? ' · 已解析' : ''}</small>${item.detection ? `<small data-testid="file-detection-${index}">${item.type === 'auto' ? `自动识别：${escape(item.detection.label)} · ${escape(item.detection.reason)}` : `手动选择：${escape(types.find((type) => type.type === item.type)?.label || item.type)}`}</small>` : ''}${item.warnings?.length ? `<small>${escape(item.warnings.join('；'))}</small>` : ''}${item.error ? `<small class="form-error">${escape(item.error)}</small>` : ''}</div>
       <select ${busy ? 'disabled' : ''} aria-label="${escape(item.file.name)} 文件类型" data-testid="document-type-${index}" data-type-index="${index}">${options.replace(`value="${escape(item.type)}"`, `value="${escape(item.type)}" selected`)}</select>
       <button ${busy ? 'disabled' : ''} data-testid="remove-file-${index}" class="icon-button remove-file" data-remove="${index}" aria-label="移除 ${escape(item.file.name)}" title="移除文件">×</button>
+      <label class="file-purpose">文件用途${purposeSelect(item.purpose, `document-purpose-${index}`, `data-purpose-index="${index}" ${busy ? 'disabled' : ''}`)}</label>
     </div>${item.metadata ? renderMetadata(item.metadata, index, busy) : ''}`).join('') : '<div class="empty-queue">选择文件后将在这里显示解析队列</div>';
   root.innerHTML = `
     <div class="app-shell">
@@ -54,7 +61,7 @@ function render(): void {
         <button data-testid="suites-nav" class="nav-item" id="suites-nav"><span class="nav-symbol">▣</span>整套手册</button>
         ${user.role === 'admin' ? '<button data-testid="llm-settings-nav" class="nav-item" id="llm-settings-nav"><span class="nav-symbol">⚙</span>模型配置</button>' : ''}
         <button data-testid="rules-nav" class="nav-item" id="rules-nav"><span class="nav-symbol">≡</span>规则手册</button>
-        <div class="sidebar-bottom"><div class="standard-tag"><span class="status-dot"></span><span>规则包已就绪<small>ISO 13485:2016 · v1.0.1</small></span></div><button ${busy ? 'disabled' : ''} data-testid="logout" id="logout" class="logout">退出登录</button></div>
+        <div class="sidebar-bottom"><div class="standard-tag"><span class="status-dot"></span><span>规则包已就绪<small data-testid="workspace-rule-version">${escape(ruleSet?.standard || '')} · v${escape(ruleSet?.version || '—')}</small></span></div><button ${busy ? 'disabled' : ''} data-testid="logout" id="logout" class="logout">退出登录</button></div>
       </aside>
       <main class="main-content">
         <header class="topbar"><div class="breadcrumb">工作区 <span>/</span> <b>文件预筛</b></div><div class="account"><span class="account-avatar">${escape((user.display_name || user.email).slice(0, 1).toUpperCase())}</span><span>${escape(user.display_name || user.email)}<small>${escape(user.role)}</small></span></div></header>
@@ -69,6 +76,7 @@ function render(): void {
                 <div class="file-list">${queued}</div>
               </section>
               ${renderDocumentReview(documentReview, asOfDate, busy, queue.length > 0)}
+              ${renderPrescreenContext(context, busy)}
               <section class="section-block action-block"><div class="action-copy"><strong>规则预筛</strong><span>逐份文件运行基础规则集，可在结果中查看证据与建议。</span></div><button id="analyze" data-testid="analyze-button" class="button button-primary" ${busy || !queue.length ? 'disabled' : ''}>${busy ? '<span class="spinner"></span> 正在处理' : '开始预筛'} <span aria-hidden="true">→</span></button></section>
               ${notice ? `<div class="inline-notice ${notice.startsWith('错误') ? 'is-error' : ''}" role="status">${escape(notice)}</div>` : ''}
               ${result ? renderResult(result) : ''}
@@ -76,7 +84,7 @@ function render(): void {
             </div>
             <aside class="side-column">
               <section class="side-panel"><div class="panel-heading"><span class="panel-icon">⌁</span><div><h3>检查范围</h3><p>当前规则包覆盖的基础线索</p></div></div><div class="scope-list"><div><span>01</span><p>文件编号与修订标识</p></div><div><span>02</span><p>批准与生效日期字段</p></div><div><span>03</span><p>部分体系文件关键要素</p></div><div><span>04</span><p>条款级文本命中情况</p></div></div><button data-testid="show-rules" id="show-rules" class="panel-link">查看规则包说明 <span>→</span></button></section>
-              <section class="side-panel quality-note" id="rule-note"><div class="note-top"><span class="status-dot"></span>使用说明</div><h3>文本命中不代表<br>过程已经有效实施</h3><p>扫描件、图片和表格中的内容可能无法完整提取。请结合原始文件、记录和实际过程进行人工复核。</p><div class="note-divider"></div><small>RULESET · ${escape(result?.rule_set.version || '1.0.1')}</small></section>
+              <section class="side-panel quality-note" id="rule-note"><div class="note-top"><span class="status-dot"></span>使用说明</div><h3>文本命中不代表<br>过程已经有效实施</h3><p>扫描件、图片和表格中的内容可能无法完整提取。请结合原始文件、记录和实际过程进行人工复核。</p><div class="note-divider"></div><small>RULESET · ${escape(result?.rule_set.version || ruleSet?.version || '—')}</small></section>
             </aside>
           </section>
         </div>
@@ -86,6 +94,17 @@ function render(): void {
 }
 
 function bindEvents(): void {
+  bindPrescreenContext(root, context, (next, redraw) => {
+    context = next; result = null;
+    if (redraw) render(); else { root.querySelector('#result')?.remove(); root.querySelector('[data-testid="audit-panel"]')?.remove(); }
+  });
+  root.querySelectorAll<HTMLSelectElement>('[data-purpose-index]').forEach(select => select.addEventListener('change', () => {
+    queue[Number(select.dataset.purposeIndex)].purpose = select.value as DocumentPurpose;
+    documentReview = null;
+    result = null;
+    notice = '';
+    render();
+  }));
   root.querySelector('#suites-nav')?.addEventListener('click', () => {
     if (!busy) void new ManualSuitesPage(root, render).open();
   });
@@ -126,7 +145,7 @@ function bindEvents(): void {
   }));
   root.querySelector<HTMLButtonElement>('#analyze')?.addEventListener('click', analyze);
   root.querySelector<HTMLButtonElement>('#logout')?.addEventListener('click', async () => {
-    await api.logout().catch(() => undefined); user = null; queue = []; result = null; documentReview = null; renderLogin();
+    await api.logout().catch(() => undefined); user = null; queue = []; result = null; documentReview = null; context = createPrescreenContext(asOfDate); renderLogin();
   });
   root.querySelectorAll<HTMLButtonElement>('#show-rules, #rules-nav').forEach((button) => button.addEventListener('click', () => {
     if (!busy) void new RuleHandbookPage(root, render).open();
@@ -137,7 +156,7 @@ function bindEvents(): void {
     const item = queue[index]; if (!item.metadata || busy) return;
     item.metadata[field] = value; item.changes = { ...item.changes, [field]: value };
     documentReview = null; result = null; notice = '文件控制信息已校正，请重新检查关联与版本'; render();
-  }, (value) => { asOfDate = value; documentReview = null; result = null; render(); }, checkRelations, confirmDecision);
+  }, (value) => { asOfDate = value; context.as_of_date = value; documentReview = null; result = null; render(); }, checkRelations, confirmDecision);
 }
 
 async function addFiles(files: File[]): Promise<void> {
@@ -146,7 +165,7 @@ async function addFiles(files: File[]): Promise<void> {
   let rejected = false;
   for (const file of files) {
     if (!allowed.test(file.name) || queue.some((item) => item.file.name === file.name && item.file.size === file.size) || queue.length >= 20) { rejected = true; continue; }
-    queue.push({ file, type: 'auto' });
+    queue.push({ file, type: 'auto', purpose: 'auto' });
   }
   notice = rejected ? '部分文件格式不支持、已在队列中或超出 20 份限制' : '';
   result = null; documentReview = null; busy = true; render();
@@ -173,11 +192,14 @@ async function analyze(): Promise<void> {
   if (busy) return;
   busy = true; notice = ''; result = null; render();
   try {
+    if (context.scope === 'system' && !context.scope_description.trim()) throw new Error('体系级审核须填写组织范围说明');
     await prepareFiles();
     if (queue.some((item) => !item.uid)) throw new Error('部分文件未解析成功，请修正或移除后重试');
     if (!documentReview) await createReview();
     if (!documentReview!.ready) { notice = '已发现文件冲突，请在“关联文件与正式版本”中选择依据并确认后再预筛'; return; }
-    result = await api.validate(queue.map((item) => item.uid!), documentReview!.review_uid, documentReview!.revision);
+    context.as_of_date = asOfDate;
+    context.purposes = Object.fromEntries(queue.map(item => [item.uid!, item.purpose]));
+    result = await api.validate(queue.map((item) => item.uid!), documentReview!.review_uid, documentReview!.revision, context);
     notice = '预筛完成，请结合文件原文复核各项线索。';
   } catch (error) {
     notice = `错误：${error instanceof Error ? error.message : '处理失败'}`;
@@ -188,7 +210,13 @@ async function analyze(): Promise<void> {
 }
 
 async function createReview(): Promise<void> {
-  const overrides = Object.fromEntries(queue.filter((item) => item.uid && item.changes && Object.keys(item.changes).length).map((item) => [item.uid!, item.changes!]));
+  const overrides: Record<string, MetadataChanges> = {};
+  for (const item of queue) {
+    if (!item.uid) continue;
+    const changes = { ...item.changes };
+    if (item.purpose === 'record') changes.layer = 'record';
+    if (Object.keys(changes).length) overrides[item.uid] = changes;
+  }
   documentReview = await api.createReview(queue.map((item) => item.uid!), asOfDate, overrides);
 }
 
@@ -216,7 +244,8 @@ async function confirmDecision(kind: 'version' | 'requirement', id: string, uid:
 
 async function loadWorkspace(): Promise<void> {
   try {
-    types = await api.documentTypes();
+    const [loadedTypes, sets] = await Promise.all([api.documentTypes(), handbookApi.list()]);
+    types = loadedTypes; ruleSet = sets[0];
     render();
   } catch (error) {
     user = null;

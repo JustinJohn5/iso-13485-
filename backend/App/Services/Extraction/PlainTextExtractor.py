@@ -23,4 +23,4 @@ def extract_text_file(path: Path) -> TextResult:
             continue
     text = raw.decode("utf-8", errors="replace")
     warnings.append("文件编码无法识别，部分字符可能显示异常")
-    return TextResult(text=text, page_count=1, warnings=warnings)
+    return TextResult(text=text, page_count=1, warnings=warnings, incomplete=True)

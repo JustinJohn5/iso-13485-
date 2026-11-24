@@ -1,15 +1,18 @@
 import { api } from '../Api';
 import { suitesApi } from '../Api/ManualSuites';
-import type { CatalogEntry, ManualSuite, SuiteItem, SuiteList } from '../Types/ManualSuite';
+import type { CatalogEntry, ManualSuite, SuiteInspection, SuiteItem, SuiteList } from '../Types/ManualSuite';
 import { escape } from '../Utils/Html';
-import { suiteInspection, suiteMembers, suiteReader } from './SuiteViews';
+import { suiteInspection, suiteInspectionHistory, suiteMembers, suiteReader } from './SuiteViews';
 import '../Suites.css';
+import { bindPrescreenContext, createPrescreenContext, renderPrescreenContext } from './PrescreenContext';
+import { editableContext, type DocumentPurpose, type PrescreenContext } from '../Types/Prescreen';
 
 export class ManualSuitesPage {
   private catalog: CatalogEntry[] = [];
   private list: SuiteList = { items: [], total: 0, page: 1, page_size: 20 };
   private suite: ManualSuite | null = null;
   private reader: SuiteItem | null = null;
+  private previousInspection?: SuiteInspection;
   private selected = new Set<string>();
   private parameters: Record<string, string> = { company: '', project: '', product: '', model: '', requirements: '' };
   private name = '';
@@ -17,6 +20,7 @@ export class ManualSuitesPage {
   private query = '';
   private filterVersion = '';
   private date = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  private context: PrescreenContext = createPrescreenContext(this.date);
   private busy = false;
   private message = '';
   private failed = false;
@@ -40,7 +44,13 @@ export class ManualSuitesPage {
     finally { this.busy = false; this.render(); }
   }
 
-  private use(suite: ManualSuite): void { this.suite = suite; this.reader = null; }
+  private use(suite: ManualSuite): void {
+    if (this.suite?.suite_uid !== suite.suite_uid) {
+      this.context = suite.inspection?.prescreen?.context ? editableContext(suite.inspection.prescreen.context) : createPrescreenContext(this.date);
+      if (this.context.as_of_date) this.date = this.context.as_of_date;
+    }
+    this.suite = suite; this.reader = null; this.previousInspection = undefined;
+  }
 
   private render(): void {
     const suite = this.suite;
@@ -54,13 +64,31 @@ export class ManualSuitesPage {
       </aside><div>${suite ? `<section class="suite-card" data-testid="suite-detail"><div class="suite-actions"><div><h2>${escape(suite.name)}</h2><p>发布版本 ${escape(suite.version)} · 档案修订 ${suite.revision}</p></div><button class="text-button" id="suite-new" data-testid="suite-new">新建其他版本</button><button class="text-button" id="suite-reload" data-testid="suite-reload">重新打开</button></div><div class="suite-actions"><label>审核基准日<input type="date" id="suite-date" data-testid="suite-date" value="${this.date}" required></label><button class="button button-primary" id="suite-inspect" data-testid="suite-inspect" ${!suite.items.length ? 'disabled' : ''}>检查整套</button><button class="button button-secondary" id="suite-download" data-testid="suite-download" ${!suite.items.length ? 'disabled' : ''}>下载整套 ZIP</button></div></section>
         <section class="suite-card"><h2>导入已有文件</h2><p>可分批补充，支持 PDF、DOCX、XLSX、TXT、MD；每套最多100份。正文解析后归档，原件保留。</p><input type="file" multiple accept=".pdf,.docx,.xlsx,.txt,.md" data-testid="suite-upload" id="suite-upload" aria-label="导入整套文件">${this.pending.length ? `<p>有 ${this.pending.length} 份已上传文件等待归档。</p><button id="suite-retry-import" data-testid="suite-retry-import">重试归档</button>` : ''}</section>
         <section class="suite-card"><details ${!suite.items.length ? 'open' : ''}><summary>批量生成目录草稿（${this.catalog.length}项）</summary><form id="suite-generate-form" class="suite-form"><div class="suite-fields">${Object.entries({ company: '组织名称', project: '项目名称', product: '产品名称', model: '产品型号', requirements: '已知输入与编写要求' }).map(([key, label]) => `<label>${label}${key === 'requirements' ? `<textarea data-parameter="${key}" data-testid="suite-parameter-${key}" maxlength="100000" required>${escape(this.parameters[key])}</textarea>` : `<input data-parameter="${key}" data-testid="suite-parameter-${key}" maxlength="120" value="${escape(this.parameters[key])}" required>`}</label>`).join('')}</div><div class="suite-actions"><button type="button" id="suite-select-all" data-testid="suite-select-all">全选可生成项</button><button type="button" id="suite-select-none" data-testid="suite-select-none">清空选择</button></div><div class="suite-directory">${this.catalog.map(row => `<label><input type="checkbox" data-catalog="${row.key}" data-testid="suite-catalog-${row.key}" ${this.selected.has(row.key) ? 'checked' : ''} ${present.has(row.key) ? 'disabled' : ''}><span>${escape(row.title)}<small>${escape(row.number)} · ${present.has(row.key) ? '已提供' : escape(row.category)}</small></span></label>`).join('')}</div><button class="button button-primary" data-testid="suite-generate" ${![...this.selected].some(key => !present.has(key)) ? 'disabled' : ''}>生成所选目录并归档</button></form></details></section>
-        ${suiteReader(this.reader)}${suiteMembers(suite, this.catalog)}${suiteInspection(suite)}` : '<section class="suite-card"><h2>建立一套可追溯的手册档案</h2><p>先填写套册名称和发布版本号，再导入已有文件或按目录生成草稿。同名不同版本分别保存，重新进入网页仍可查阅。</p></section>'}</div></div></fieldset></main>`;
+        ${renderPrescreenContext(this.context, this.busy)}${suiteReader(this.reader)}${suiteMembers(suite, this.catalog, this.context)}${suiteInspectionHistory(suite, this.previousInspection)}${suiteInspection(suite, this.previousInspection)}` : '<section class="suite-card"><h2>建立一套可追溯的手册档案</h2><p>先填写套册名称和发布版本号，再导入已有文件或按目录生成草稿。同名不同版本分别保存，重新进入网页仍可查阅。</p></section>'}</div></div></fieldset></main>`;
     this.bind();
   }
 
   private bind(): void {
+    bindPrescreenContext(this.root, this.context, (context, redraw) => {
+      this.context = context;
+      if (this.suite) this.suite.inspection = null;
+      if (redraw) this.render(); else if (!this.previousInspection) this.root.querySelector('[data-testid="suite-inspection"]')?.remove();
+    });
+    this.root.querySelectorAll<HTMLButtonElement>('[data-checked-revision]').forEach(button => button.addEventListener('click', () => {
+      void this.run(async () => {
+        this.previousInspection = await suitesApi.inspection(this.suite!, Number(button.dataset.checkedRevision));
+      });
+    }));
+    this.root.querySelector('#suite-close-historical')?.addEventListener('click', () => {
+      this.previousInspection = undefined;
+      this.render();
+    });
+    this.root.querySelectorAll<HTMLSelectElement>('[data-suite-purpose]').forEach(select => select.addEventListener('change', () => {
+      this.context.purposes[select.dataset.suitePurpose!] = select.value as DocumentPurpose;
+      this.suite!.inspection = null; this.render();
+    }));
     this.root.querySelector('#suite-back')?.addEventListener('click', this.back);
-    for (const [id, set] of Object.entries({ 'suite-name': (v: string) => { this.name = v; }, 'suite-version': (v: string) => { this.version = v; }, 'suite-query': (v: string) => { this.query = v; }, 'suite-filter-version': (v: string) => { this.filterVersion = v; }, 'suite-date': (v: string) => { this.date = v; } })) {
+    for (const [id, set] of Object.entries({ 'suite-name': (v: string) => { this.name = v; }, 'suite-version': (v: string) => { this.version = v; }, 'suite-query': (v: string) => { this.query = v; }, 'suite-filter-version': (v: string) => { this.filterVersion = v; }, 'suite-date': (v: string) => { this.date = v; this.context.as_of_date = v; if (this.suite) this.suite.inspection = null; this.root.querySelector('[data-testid="suite-inspection"]')?.remove(); } })) {
       this.root.querySelector<HTMLInputElement>(`#${id}`)?.addEventListener('input', event => set((event.target as HTMLInputElement).value));
     }
     this.root.querySelector('#suite-create-form')?.addEventListener('submit', event => { event.preventDefault(); void this.run(async () => {
@@ -107,7 +135,13 @@ export class ManualSuitesPage {
       void this.run(async () => { this.use(await suitesApi.revise(this.suite!, id, key, version)); }, '成员信息已保存，请重新检查整套。');
     }));
     this.root.querySelectorAll<HTMLButtonElement>('[data-remove-item]').forEach(button => button.addEventListener('click', () => { void this.run(async () => { this.use(await suitesApi.remove(this.suite!, button.dataset.removeItem!)); await this.refreshList(); }, '已移出本套，上传原件保留；请重新检查。'); }));
-    this.root.querySelector('#suite-inspect')?.addEventListener('click', () => { void this.run(async () => { if (!this.date) throw new Error('请选择审核基准日'); this.use(await suitesApi.inspect(this.suite!, this.date)); }, '整套检查已保存。'); });
+    this.root.querySelector('#suite-inspect')?.addEventListener('click', () => { void this.run(async () => {
+      if (!this.date) throw new Error('请选择审核基准日');
+      if (this.context.scope === 'system' && !this.context.scope_description.trim()) throw new Error('体系级审核须填写组织范围说明');
+      this.context.as_of_date = this.date;
+      this.context.purposes = Object.fromEntries(this.suite!.items.map(item => [item.id, this.context.purposes[item.id] || 'auto']));
+      this.use(await suitesApi.inspect(this.suite!, this.date, this.context));
+    }, '整套检查已保存。'); });
     this.root.querySelector('#suite-download')?.addEventListener('click', () => { void this.run(async () => { await suitesApi.download(this.suite!); }, '整套归档已下载。'); });
   }
 

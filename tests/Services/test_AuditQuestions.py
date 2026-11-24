@@ -39,3 +39,13 @@ def test_export_contains_questions_and_manual_followup_fields():
     text = '\n'.join(item.text for item in Document(BytesIO(export_questions(report))).paragraphs)
     assert '审核提问' in text and '版本信息尚未检出' in text
     assert '责任人：待填写' in text and '有效性验证' in text and 'test-run' in text
+
+
+def test_new_pending_and_manual_states_never_become_implementation_verification():
+    rows = [{**finding('fail'), 'assessment_status': 'pending_input'},
+            {**finding('skipped'), 'assessment_status': 'manual_review'},
+            {**finding('fail'), 'assessment_status': 'unreadable'}]
+    report = build_questions('new-run', rows, {'prescreen': {'version': '2.0.0'}})
+    assert report['summary']['verification'] == 0
+    assert {row['kind'] for row in report['questions']} == {'pending', 'manual', 'unreadable'}
+    assert '信息待补' in '\n'.join(p.text for p in Document(BytesIO(export_questions(report))).paragraphs)

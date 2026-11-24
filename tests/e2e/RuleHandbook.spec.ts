@@ -6,7 +6,9 @@ test('规则手册可独立阅读并按条款和关键词检索实际规则', as
   await login(page);
   await page.getByTestId('rules-nav').click();
   await expect(page.getByTestId('rule-handbook')).toContainText('ISO 13485:2016');
-  await expect(page.getByTestId('rule-handbook')).toContainText('1.0.1');
+  await expect(page.getByTestId('rule-handbook')).toContainText('2.0.0');
+  await expect(page.getByTestId('rule-list')).toContainText('标准要求');
+  await expect(page.getByTestId('rule-list')).toContainText('项目约定');
   await page.getByTestId('rule-clause').selectOption('4.2.4');
   await page.getByTestId('rule-type').selectOption('quality_manual');
   await page.getByTestId('rule-search').fill('DOC-001');

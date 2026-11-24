@@ -87,6 +87,17 @@ class RuleSetLoader:
             raise ApiError(1305, f"规则包 {path.name} 不是合法 JSON：{exc.msg}") from exc
 
         try:
+            if payload.get('rule_set_id') == DEFAULT_RULE_SET_ID and payload.get('version') == '2.0.0':
+                from App.Services.Rules.RequirementCatalog import load_catalog
+                catalog = load_catalog()
+                for row in catalog['requirements']:
+                    payload['rules'].append(dict(
+                        rule_id=row['rule_id'], title=row['title'], clause=row['clause'],
+                        clause_title=row['title'], severity='observation', document_types=row['document_types'],
+                        templates=row['templates'], topics=row['topics'], conditions=row['conditions'],
+                        check=dict(type='requirement', terms=row['terms']), rationale=row['generation'],
+                        suggestion=row['evidence'], source=row['source'], basis_kind='standard',
+                        uncertainty=row['uncertainty'], per_document=False))
             rule_set = RuleSet.model_validate(payload)
         except ValidationError as exc:
             first = exc.errors()[0]

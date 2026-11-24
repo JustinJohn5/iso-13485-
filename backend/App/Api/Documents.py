@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
 
 from App.Api.Dependencies import current_user, require_writer
@@ -20,11 +21,13 @@ from App.Models.UploadedFile import UploadedFile
 from App.Models.User import User
 from App.Models.ValidationDocument import ValidationDocument
 from App.Models.ValidationRun import STATUS_SUCCEEDED, ValidationRun
+from App.Schemas.Prescreen import PrescreenContext, freeze_context
 from App.Services.Extraction.ExtractorRegistry import extract
 from App.Services.DocumentClassifier import resolve_document_type
 from App.Services.DocumentControl.Metadata import extract_metadata
 from App.Services.DocumentControl.ReviewStore import validation_scope
 from App.Services.Rules.RuleEngine import DocumentInput, RuleEngine
+from App.Services.Rules.PrescreenReport import build_prescreen_report, evaluation_dict
 from App.Services.ScoringService import build_score
 from App.Utils.Errors import ApiError
 from App.Utils.FileGuard import (
@@ -103,7 +106,7 @@ async def upload_document(
         verify_signature(extension, bytes(head), path)
         extracted = extract(path, extension)
         if extracted.status != "ok":
-            raise ApiError(1205, "文件可读取文本过少；扫描件请先进行 OCR 处理")
+            extracted.warnings.append('原件已保留，但文本无法可靠判定；请补充OCR或可读文件后重新检查')
         resolved_type, detection = resolve_document_type(document_type, original_name, extracted.text, rule_set)
         row = UploadedFile(
             file_uid=str(uuid4()),
@@ -132,6 +135,7 @@ async def upload_document(
             "char_count": row.char_count,
             "page_count": row.page_count,
             "warnings": extracted.warnings,
+            "text_status": extracted.status,
         }, "文件已解析")
     except Exception:
         path.unlink(missing_ok=True)
@@ -146,6 +150,7 @@ def validate_documents(
     file_uids: list[str] = Form(...),
     review_uid: str = Form(''),
     review_revision: int | None = Form(None),
+    context: str = Form(''),
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
@@ -158,7 +163,15 @@ def validate_documents(
         raise ApiError(1203)
     if user.role != "admin" and any(row.uploaded_by != user.id for row in files):
         raise ApiError(1104)
-    selected_uids, review_snapshot = validation_scope(db, user, [by_uid[uid] for uid in file_uids], review_uid, review_revision)
+    try:
+        if len(context) > 100000:
+            raise ValueError('审核上下文过长')
+        parsed_context = PrescreenContext.model_validate(json.loads(context)) if context else PrescreenContext()
+        frozen_context = freeze_context(parsed_context, user_id=user.id, file_uids=file_uids)
+    except (ValueError, ValidationError) as exc:
+        raise ApiError(1001, '审核范围、适用条件或用途不合法，请检查条款理由和依据') from exc
+    selected_uids, review_snapshot = validation_scope(db, user, [by_uid[uid] for uid in file_uids], review_uid, review_revision,
+                                                       frozen_context['as_of_date'], frozen_context['purposes'])
     excluded_versions = [by_uid[uid].original_name for uid in file_uids if uid not in selected_uids]
     file_uids = selected_uids
     rule_set = rule_loader().get()
@@ -170,8 +183,8 @@ def validate_documents(
         row = by_uid[uid]
         previous = seen.get(row.sha256)
         if previous:
-            if previous.document_type != row.document_type:
-                raise ApiError(1001, "相同内容的文件选择了不同类型，请统一文件类型后重试")
+            if previous.document_type != row.document_type or frozen_context['purposes'].get(previous.file_uid, 'auto') != frozen_context['purposes'].get(uid, 'auto'):
+                raise ApiError(1001, "相同内容的文件选择了不同类型或用途，请统一后重试")
             duplicates.append({"name": row.original_name, "kept_name": previous.original_name})
             continue
         seen[row.sha256] = row
@@ -183,14 +196,16 @@ def validate_documents(
             file_uid=uid,
             name=by_uid[uid].original_name,
             document_type=by_uid[uid].document_type,
-            text=by_uid[uid].extracted_text,
+            text=by_uid[uid].extracted_text if by_uid[uid].text_status != 'insufficient' else '',
             page_count=by_uid[uid].page_count,
             char_count=by_uid[uid].char_count,
+            text_status=by_uid[uid].text_status,
         )
         for uid in file_uids
     ]
-    evaluations = RuleEngine(rule_set).evaluate(inputs)
-    score = build_score(rule_set, evaluations, document_conflicts=bool(review_snapshot and review_snapshot['requirement_conflicts']))
+    evaluations = RuleEngine(rule_set).evaluate(inputs, frozen_context, review=review_snapshot)
+    prescreen = build_prescreen_report(rule_set, evaluations, frozen_context, review=review_snapshot)
+    score = build_score(rule_set, evaluations, document_conflicts=bool(review_snapshot and review_snapshot.get('requirement_conflicts')))
     timestamp = now()
     run = ValidationRun(
         run_uid=str(uuid4()), rule_set_id=rule_set.rule_set_id,
@@ -200,7 +215,7 @@ def validate_documents(
         critical_count=score.critical_count, major_count=score.major_count,
         minor_count=score.minor_count, observation_count=score.observation_count,
         total_count=score.total_count, created_by=user.id, started_at=timestamp, finished_at=timestamp,
-        review_snapshot=review_snapshot,
+        review_snapshot={**(review_snapshot or {}), 'prescreen': prescreen},
     )
     ValidationDao.create_run(db, run)
     ValidationDao.add_documents(db, [
@@ -226,17 +241,11 @@ def validate_documents(
         "score": score.to_dict(),
         "duplicate_files": duplicates,
         "excluded_versions": excluded_versions,
-        "document_review": review_snapshot,
+        "document_review": review_snapshot if review_uid else None,
+        "prescreen": prescreen,
         "documents": [{"name": item.name, "document_type": item.document_type,
                        "type_label": rule_set.document_type_label(item.document_type)} for item in inputs],
-        "findings": [
-            {"rule_id": item.rule.rule_id, "title": item.rule.title, "clause": item.rule.clause,
-             "clause_title": item.rule.clause_title, "severity": item.rule.severity,
-             "status": item.status, "document_name": item.document_name,
-             "evidence": item.evidence, "detail": item.detail,
-             "suggestion": item.rule.suggestion}
-            for item in evaluations
-        ],
+        "findings": [evaluation_dict(item) for item in evaluations],
         "disclaimer": "本结果仅为基于文本规则的预筛查，不构成 ISO 13485 认证、审核结论或法规符合性声明。",
     }, "校验完成")
 

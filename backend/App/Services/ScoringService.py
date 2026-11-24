@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 
 from App.Services.Rules.RuleEngine import STATUS_FAIL, STATUS_PASS, STATUS_SKIPPED, RuleEvaluation
 from App.Services.Rules.RuleModels import RuleSet, SeverityDef
+from App.Services.Rules.PrescreenReport import coverage_for
 
 DEFAULT_SEVERITY_WEIGHTS: dict[str, float] = {
     "critical": 10.0,
@@ -69,6 +70,7 @@ class ScoreResult:
     minor_count: int
     observation_count: int
     clause_matrix: list[ClauseCoverage] = field(default_factory=list)
+    coverage: dict | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -83,6 +85,7 @@ class ScoreResult:
             "minor_count": self.minor_count,
             "observation_count": self.observation_count,
             "clause_matrix": [item.to_dict() for item in self.clause_matrix],
+            "coverage": self.coverage,
         }
 
 
@@ -99,6 +102,29 @@ def _severity_def(rule_set: RuleSet, severity: str) -> SeverityDef:
 
 def build_score(rule_set: RuleSet, evaluations: list[RuleEvaluation], *, document_conflicts: bool = False) -> ScoreResult:
     """按严重程度加权计算得分，并对严重不符合设置得分上限。"""
+    if rule_set.rule_set_id == 'iso13485-core' and rule_set.version == '2.0.0':
+        coverage = coverage_for(evaluations)
+        counts = {key: sum(row.assessment_status == key for row in evaluations)
+                  for key in ('evidence_found', 'gap', 'pending_input', 'conflict', 'unreadable')}
+        if document_conflicts or counts['conflict']:
+            verdict = '存在冲突，待核对'
+        elif counts['unreadable']:
+            verdict = '部分资料无法判定'
+        elif counts['pending_input']:
+            verdict = '存在待补信息'
+        elif counts['gap']:
+            verdict = '存在文本缺口'
+        elif not coverage['computable']:
+            verdict = '不具备计算条件'
+        else:
+            verdict = '已检出文本线索，待实施取证'
+        failed = sum(row.status == STATUS_FAIL for row in evaluations)
+        passed = counts['evidence_found']
+        return ScoreResult(score=coverage['value'] or 0.0, verdict=verdict, passed_count=passed,
+                           failed_count=failed, skipped_count=len(evaluations)-passed-failed,
+                           total_count=passed+failed, critical_count=0, major_count=0,
+                           minor_count=0, observation_count=0,
+                           clause_matrix=_build_clause_matrix(evaluations), coverage=coverage)
     applicable = [item for item in evaluations if item.status != STATUS_SKIPPED]
     passed = [item for item in applicable if item.status == STATUS_PASS]
     failed = [item for item in applicable if item.status == STATUS_FAIL]

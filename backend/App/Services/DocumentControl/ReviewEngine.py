@@ -3,7 +3,7 @@ from copy import deepcopy
 from datetime import date
 
 from App.Services.DocumentControl.Metadata import extract_metadata, extract_references
-from App.Services.DocumentControl.Requirements import build_requirement_conflicts, retention_facts
+from App.Services.DocumentControl.Requirements import build_retention_review, retention_facts
 from App.Services.DocumentControl.Versions import build_version_groups, ineligible, selected_documents
 from App.Utils.Errors import ApiError
 from App.Utils.TimeUtils import now
@@ -28,12 +28,13 @@ def refresh_relations(snapshot: dict) -> None:
                                'target_file_uids': [target['file_uid'] for target in targets], 'status': state})
     snapshot['references'] = references
     previous = {item['id']: item for item in snapshot.get('requirement_conflicts', [])}
-    issues = build_requirement_conflicts(selected)
+    issues, manual = build_retention_review(selected)
     for issue in issues:
         old = previous.get(issue['id'])
         if old and old['facts'] == issue['facts']:
             issue['decision'] = old.get('decision')
     snapshot['requirement_conflicts'] = issues
+    snapshot['requirement_manual'] = manual
 
 
 def build_review(files: list, as_of: date, overrides: dict[str, dict]) -> dict:

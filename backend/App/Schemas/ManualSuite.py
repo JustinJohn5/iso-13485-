@@ -4,6 +4,7 @@ from datetime import date
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from App.Services.ManualSuites.Content import clean_value
+from App.Schemas.Prescreen import PrescreenContext
 
 
 class SuiteCreate(BaseModel):
@@ -40,3 +41,4 @@ class SuiteItemUpdate(SuiteMutation):
 
 class SuiteInspection(SuiteMutation):
     as_of_date: date
+    context: PrescreenContext | None = None

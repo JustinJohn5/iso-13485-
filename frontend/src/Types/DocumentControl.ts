@@ -16,9 +16,14 @@ export interface RequirementConflict {
   id: string; number: string; field: string; file_uids: string[]; explanation: string; decision: ReviewDecision | null;
   facts: Array<{ file_uid: string; quote: string; line: number; value: string }>;
 }
+export interface RequirementManual {
+  number: string; explanation: string;
+  facts: Array<{ file_uid: string; quote: string; line: number }>;
+}
 export interface DocumentReview {
   review_uid: string; revision: number; ready: boolean; as_of_date: string;
   documents: ReviewDocument[]; version_groups: VersionGroup[]; requirement_conflicts: RequirementConflict[];
+  requirement_manual?: RequirementManual[];
   references: Array<{ source_file_uid: string; number: string; quote: string; line: number; target_file_uids: string[]; status: string }>;
   decision_history: ReviewDecision[];
 }

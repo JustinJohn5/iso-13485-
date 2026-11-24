@@ -91,8 +91,8 @@ def test_reference_waits_for_version_confirmation_and_missing_is_not_nonexistenc
 
 
 def test_retention_conflict_keeps_both_files_and_decision_history():
-    snapshot = make_review(sample('manual', number='QM-01', body='QR-07 记录保存期限为3年，按 QP-07 执行'),
-                           sample('procedure', number='QP-07', body='QR-07 记录保存期限为5年'))
+    snapshot = make_review(sample('manual', number='QM-01', body='QR-07 记录自放行日起保存期限为3年，按 QP-07 执行'),
+                           sample('procedure', number='QP-07', body='QR-07 记录自放行日起保存期限为5年'))
     group = snapshot['requirement_conflicts'][0]
     assert group['number'] == 'QR-07'
     assert group['facts'][0]['line'] == 5
@@ -117,13 +117,27 @@ def test_retention_on_unrelated_numbers_is_not_compared():
 
 
 def test_changing_version_removes_conflicts_based_only_on_excluded_old_file():
-    snapshot = make_review(sample('a', number='QM-01', body='QR-01 保存期限3年'),
-                           sample('old', body='QR-01 保存期限5年'),
-                           sample('new', revision='02', effective='2026年01月01日', body='QR-01 保存期限3年'))
+    snapshot = make_review(sample('a', number='QM-01', body='QR-01 自放行日起保存期限3年'),
+                           sample('old', body='QR-01 自放行日起保存期限5年'),
+                           sample('new', revision='02', effective='2026年01月01日', body='QR-01 自放行日起保存期限3年'))
     assert snapshot['requirement_conflicts']
     confirmed = decide(snapshot, 'version', snapshot['version_groups'][0]['id'], 'new', '已确认新版发布并替代旧版', 7)
     assert not confirmed['requirement_conflicts']
     assert review_ready(confirmed)
+
+
+@pytest.mark.parametrize('second', ['QR-01 记录保存期限5年', 'QR-01 记录自归档日起保存期限5年'])
+def test_unclear_or_different_start_events_require_manual_review(second):
+    snapshot = make_review(sample('a', number='QM-01', body='QR-01 记录自放行日起保存期限3年'),
+                           sample('b', number='QP-07', body=second))
+    assert not snapshot['requirement_conflicts']
+    assert snapshot['requirement_manual'][0]['number'] == 'QR-01'
+
+
+def test_matching_release_event_retains_minimum_and_disposal_conflict_evidence():
+    snapshot = make_review(sample('a', number='QM-01', body='QR-01 记录自放行日起保存期限至少3年'),
+                           sample('b', number='QP-07', body='QR-01 记录自放行日起保存1年后销毁'))
+    assert len(snapshot['requirement_conflicts'][0]['facts']) == 2
 
 
 def test_approval_label_does_not_claim_verified_approval():

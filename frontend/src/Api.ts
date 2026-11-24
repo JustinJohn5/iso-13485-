@@ -1,4 +1,5 @@
 import type { ControlMetadata, DocumentReview, MetadataChanges } from './Types/DocumentControl';
+import type { AssessmentStatus, DocumentPurpose, PrescreenContext, PrescreenReport } from './Types/Prescreen';
 
 export interface ApiEnvelope<T> {
   code: number;
@@ -50,6 +51,16 @@ export interface Finding {
   evidence: string;
   detail: string;
   suggestion: string;
+  assessment_status?: AssessmentStatus;
+  document_uid?: string;
+  purpose?: DocumentPurpose;
+  matched_terms?: string[];
+  missing_terms?: string[];
+  locations?: Array<{ document_uid?: string; file_uid?: string; line: number; quote: string; kind?: string; excerpted?: boolean }>;
+  basis_kind?: 'standard' | 'project';
+  source?: string;
+  manual_review?: string[];
+  checks?: Array<{ id: string; element: string; assessment_status: AssessmentStatus; matched_term: string; locations?: Finding['locations']; location_count?: number; detail: string }>;
 }
 
 export interface ValidationResult {
@@ -70,6 +81,7 @@ export interface ValidationResult {
   excluded_versions: string[];
   document_review: DocumentReview | null;
   disclaimer: string;
+  prescreen?: PrescreenReport;
 }
 
 const apiBase = import.meta.env.VITE_API_BASE_URL;
@@ -123,11 +135,12 @@ export const api = {
   confirmReview: (review: DocumentReview, kind: 'version' | 'requirement', issue: string, uid: string, reason: string) => request<DocumentReview>(`/api/v1/document-reviews/${encodeURIComponent(review.review_uid)}/decisions`, {
     method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ revision: review.revision, kind, issue_id: issue, file_uid: uid, reason }),
   }),
-  validate: (uids: string[], reviewUid = '', reviewRevision?: number) => {
+  validate: (uids: string[], reviewUid = '', reviewRevision?: number, context?: PrescreenContext) => {
     const body = new FormData();
     uids.forEach((uid) => body.append('file_uids', uid));
     if (reviewUid) body.append('review_uid', reviewUid);
     if (reviewRevision !== undefined) body.append('review_revision', String(reviewRevision));
+    if (context) body.append('context', JSON.stringify(context));
     return request<ValidationResult>('/api/v1/validations', { method: 'POST', body });
   },
 };

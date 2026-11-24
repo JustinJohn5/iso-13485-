@@ -100,7 +100,7 @@ def test_inspection_reports_missing_directory_references_and_unresolved_conflict
     report = inspect_items(items, rules, '2026-11-24')
     assert report['missing_catalog']
     assert any(row['number'] == 'QP-99' and row['status'] == 'missing' for row in report['review']['references'])
-    assert report['findings'] and report['rule_set']['version'] == '1.0.1'
+    assert report['findings'] and report['rule_set']['version'] == '2.0.0'
     assert report['review']['as_of_date'] == '2026-11-24'
     with pytest.raises(ApiError):
         inspect_items([], rules, '2026-11-24')

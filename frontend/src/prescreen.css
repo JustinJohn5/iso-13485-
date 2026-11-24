@@ -1,0 +1,27 @@
+.prescreen-context { margin-top: 18px; overflow-wrap: anywhere; }
+.prescreen-context h2 { font-size: 16px; margin-top: 0; }
+.prescreen-context p, .prescreen-report p, .generation-review p { color: var(--muted); line-height: 1.8; }
+.prescreen-context fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.prescreen-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.prescreen-fields label { display: flex; flex-direction: column; gap: 7px; min-width: 0; font-size: 12px; color: var(--muted); }
+.prescreen-fields input, .prescreen-fields textarea, .prescreen-fields select { width: 100%; min-width: 0; padding: 10px; border: 1px solid var(--line); border-radius: 6px; font: inherit; color: var(--ink); background: white; }
+.prescreen-fields textarea { min-height: 76px; resize: vertical; }
+.prescreen-wide { grid-column: 1 / -1; }
+.prescreen-decisions { margin-top: 16px; }
+.prescreen-decisions summary { cursor: pointer; padding: 10px 0; }
+.prescreen-decisions article { border-top: 1px solid var(--line); padding: 10px 0; }
+.file-purpose { grid-column: 2 / -1; display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 11px; min-width: 0; }
+.file-purpose select { min-width: 0; max-width: 100%; }
+.prescreen-report { padding: 16px 20px; min-width: 0; overflow-wrap: anywhere; }
+.prescreen-coverage { display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline; }
+.prescreen-coverage strong { font: 28px var(--mono); color: var(--green-dark); }
+.prescreen-states { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 15px 0; }
+.prescreen-states div { padding: 10px; border: 1px solid var(--line); border-radius: 6px; }
+.prescreen-states b, .prescreen-states span { display: block; font-size: 12px; }
+.prescreen-states b { margin-bottom: 6px; font: 20px var(--mono); }
+.finding-extra { white-space: pre-wrap; }
+.generation-review { border: 1px solid var(--line); border-radius: 8px; padding: 16px; margin: 16px 0; min-width: 0; overflow-wrap: anywhere; }
+.generation-review summary { cursor: pointer; font-weight: 600; padding: 7px 0; }
+.generation-review article { padding: 10px 0; border-top: 1px solid var(--line); }
+.generation-review ul { padding-left: 20px; line-height: 1.8; }
+@media(max-width: 580px) { .prescreen-fields { grid-template-columns: minmax(0, 1fr); } .prescreen-states { grid-template-columns: repeat(2, minmax(0, 1fr)); } .prescreen-report { padding: 12px; } .file-purpose { grid-column: 2 / 3; flex-wrap: wrap; } }

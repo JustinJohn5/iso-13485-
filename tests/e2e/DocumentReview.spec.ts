@@ -59,8 +59,8 @@ test('跨文件期限冲突保留双方并展示待补充引用', async ({ page 
   const verify = watchPage(page);
   await login(page);
   await page.getByTestId('upload-files').setInputFiles([
-    document('质量手册.txt', 'QM-02', '01', '2025年01月01日', 'QR-07 记录保存期限为3年，按 QP-07 执行'),
-    document('采购程序.txt', 'QP-07', '01', '2025年01月01日', 'QR-07 记录保存期限为5年'),
+    document('质量手册.txt', 'QM-02', '01', '2025年01月01日', 'QR-07 记录自放行日起保存期限为3年，按 QP-07 执行'),
+    document('采购程序.txt', 'QP-07', '01', '2025年01月01日', 'QR-07 记录自放行日起保存期限为5年'),
   ]);
   await expect(page.getByTestId('file-detection-1')).toBeVisible();
   const review = await check(page);
@@ -73,8 +73,8 @@ test('跨文件期限冲突保留双方并展示待补充引用', async ({ page 
   const result = await analyze(page);
   expect(result.documents).toHaveLength(2);
   expect(result.document_review.requirement_conflicts[0].decision.file_uid).toBe(review.documents[1].file_uid);
-  expect(result.score.verdict).toBe('存在冲突，待修订');
-  await expect(page.getByTestId('result-verdict')).toHaveText('存在冲突，待修订');
+  expect(result.score.verdict).toBe('存在冲突，待核对');
+  await expect(page.getByTestId('result-verdict')).toHaveText('存在冲突，待核对');
   await expect(page.getByTestId('review-snapshot')).toContainText('仍需');
   await page.screenshot({ path: '.local/ReviewDesktop.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
@@ -106,6 +106,53 @@ test('填写记录确认层级后不会互相替换并支持校正编号类别',
   expect(review.documents[0].metadata.number).toBe('QR-001');
   const result = await analyze(page);
   expect(result.documents).toHaveLength(2);
+  await verify();
+});
+
+test('同模板的不同批次可通过文件用途独立检查', async ({ page }) => {
+  const verify = watchPage(page);
+  await login(page);
+  await page.getByTestId('upload-files').setInputFiles([
+    document('批次甲审核附件.txt', 'QR-22', '01', '2025年01月01日', '批次甲，本次测量结果已记录。'),
+    document('批次乙审核附件.txt', 'QR-22', '01', '2025年01月01日', '批次乙，本次测量结果已记录。'),
+  ]);
+  await expect(page.getByTestId('file-detection-1')).toBeVisible();
+  await page.getByTestId('metadata-0').locator('summary').click();
+  await page.getByTestId('meta-0-layer').selectOption('template');
+  const previous = await check(page);
+  expect(previous.version_groups).toHaveLength(1);
+  for (const index of [0, 1]) await page.getByTestId(`document-purpose-${index}`).selectOption('record');
+  await expect(page.getByTestId('review-status')).toHaveCount(0);
+  const current = await check(page);
+  expect(current.review_uid).not.toBe(previous.review_uid);
+  expect(current.version_groups).toHaveLength(0);
+  expect(current.documents.map((row: { metadata: { layer: string } }) => row.metadata.layer)).toEqual(['record', 'record']);
+  const result = await analyze(page);
+  expect(result.documents).toHaveLength(2);
+  await expect(page.getByTestId('result-documents')).toContainText('实际记录');
+  await page.getByTestId('document-purpose-0').selectOption('form');
+  await expect(page.getByTestId('results')).toHaveCount(0);
+  const adjusted = await check(page);
+  expect(adjusted.documents[0].metadata.layer).toBe('template');
+  expect(adjusted.documents[1].metadata.layer).toBe('record');
+  await verify();
+});
+
+test('保存期限起算事件不同时显示人工核实及双方原文', async ({ page }) => {
+  const verify = watchPage(page);
+  await login(page);
+  await page.getByTestId('upload-files').setInputFiles([
+    document('质量手册.txt', 'QM-03', '01', '2025年01月01日', 'QR-08 记录自放行日起保存期限为3年'),
+    document('采购程序.txt', 'QP-08', '01', '2025年01月01日', 'QR-08 记录自归档日起保存期限为5年'),
+  ]);
+  await expect(page.getByTestId('file-detection-1')).toBeVisible();
+  const review = await check(page);
+  expect(review.requirement_conflicts).toHaveLength(0);
+  expect(review.requirement_manual[0].facts).toHaveLength(2);
+  const manual = page.getByTestId('requirement-manual-QR-08');
+  await expect(manual).toContainText('人工核实');
+  await expect(manual).toContainText('放行日起');
+  await expect(manual).toContainText('归档日起');
   await verify();
 });
 

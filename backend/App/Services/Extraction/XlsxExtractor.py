@@ -41,4 +41,5 @@ def extract_xlsx(path: Path) -> TextResult:
     finally:
         workbook.close()
 
-    return TextResult(text="\n".join(lines), page_count=len(workbook.sheetnames), warnings=warnings)
+    return TextResult(text="\n".join(lines), page_count=len(workbook.sheetnames), warnings=warnings,
+                      incomplete=bool(warnings))

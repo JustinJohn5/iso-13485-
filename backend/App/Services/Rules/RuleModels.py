@@ -18,6 +18,7 @@ CheckType = Literal[
     "date",
     "length",
     "required_documents",
+    "requirement",
 ]
 
 
@@ -49,7 +50,7 @@ class CheckSpec(BaseModel):
             raise ValueError("present/absent 校验必须提供 patterns")
         if self.type == "section" and not self.headings:
             raise ValueError("section 校验必须提供 headings")
-        if self.type == "all_terms" and not self.terms:
+        if self.type in ("all_terms", "requirement") and not self.terms:
             raise ValueError("all_terms 校验必须提供 terms")
         if self.type == "date" and not self.patterns:
             raise ValueError("date 校验必须提供 patterns")
@@ -76,6 +77,13 @@ class Rule(BaseModel):
     suggestion: str = ""
     # 是否逐份文档判定；False 时对同类文档的合并文本判定一次
     per_document: bool = True
+    basis_kind: str = 'standard'
+    source: dict | str = Field(default_factory=dict)
+    templates: list[str] = Field(default_factory=list)
+    topics: list[str] = Field(default_factory=list)
+    conditions: list[str] = Field(default_factory=list)
+    uncertainty: str = ''
+    evidence_requirements: list[str] = Field(default_factory=list)
 
     @field_validator("rule_id")
     @classmethod

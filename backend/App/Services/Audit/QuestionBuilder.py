@@ -21,6 +21,21 @@ def build_questions(run_uid: str, findings: list[dict], review: dict | None) -> 
                           'evidence': evidence, 'question': question, 'action': action})
 
     for finding in findings:
+        assessment = finding.get('assessment_status')
+        if assessment:
+            if assessment in ('not_applicable', 'out_of_scope'):
+                continue
+            kind = {'gap': 'gap', 'pending_input': 'pending', 'unreadable': 'unreadable',
+                    'manual_review': 'manual', 'conflict': 'conflict', 'evidence_found': 'verification'}[assessment]
+            prompt = {'pending': '请补充待填事实、适用性或未提供的引用依据，再重新检查。',
+                      'unreadable': '请核对原件并提供OCR、表格或图片中的可读证据；无法抽取不代表内容不存在。',
+                      'manual': '请人工核对来源疑点、对象关系、真实性及实施证据。',
+                      'conflict': '请保留双方原文并确认相同对象、条件和版本下应采用的依据。',
+                      'gap': '未检出的要素是否在原件或配套文件中存在？请提供具体位置。',
+                      'verification': '请展示实际执行记录、真实批准和有效性证据；检出文本不能证明实施。'}[kind]
+            add(kind, finding['title'], finding['clause'], finding.get('evidence', ''), prompt,
+                finding.get('suggestion', ''), finding.get('document', ''))
+            continue
         if finding['status'] == 'skipped':
             continue
         failed = finding['status'] == 'fail'
@@ -43,7 +58,10 @@ def build_questions(run_uid: str, findings: list[dict], review: dict | None) -> 
             add('conflict', f"跨文件要求冲突：{group['number']} / {group['field']}", '', evidence,
                 '不同文件的要求为何不同？本次采用的依据是否已获确认，源文件修订与相关引用更新是否完成？',
                 '依据适用要求确认取舍，修订源文件并复核所有引用；选择本次依据并不消除原文矛盾。')
-    summary = {kind: sum(item['kind'] == kind for item in questions) for kind in ('gap', 'reference', 'conflict', 'verification')}
+    kinds = ('gap', 'reference', 'conflict', 'verification')
+    if any(item.get('assessment_status') for item in findings):
+        kinds += ('pending', 'unreadable', 'manual')
+    summary = {kind: sum(item['kind'] == kind for item in questions) for kind in kinds}
     return {'run_uid': run_uid, 'questions': questions, 'summary': summary,
             'basis': '已保存的预筛规则命中与文件集依据快照；不重新调用模型，不改变原预筛结果。',
             'disclaimer': '本清单用于模拟内审准备，缺项和冲突是待核实线索，不构成不符合项定性、完整标准审核或认证结论。'}
@@ -60,7 +78,8 @@ def export_questions(report: dict) -> bytes:
     document.add_paragraph('预筛任务：' + report['run_uid'])
     document.add_paragraph(report['basis'])
     document.add_paragraph(report['disclaimer'])
-    labels = {'gap': '规则缺项', 'reference': '引用待核对', 'conflict': '跨文件冲突', 'verification': '实施取证'}
+    labels = {'gap': '文本缺口', 'reference': '引用待核对', 'conflict': '冲突待核对', 'verification': '实施取证',
+              'pending': '信息待补', 'unreadable': '文本无法判定', 'manual': '人工核实'}
     for index, item in enumerate(report['questions'], 1):
         document.add_heading(f"{index}. {item['title']}", 1)
         document.add_paragraph(f"类型：{labels[item['kind']]}　条款：{item['clause'] or '文件集关联线索'}")

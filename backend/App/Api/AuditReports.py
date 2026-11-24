@@ -28,6 +28,11 @@ def report_for(db, user, run_uid):
         raise ApiError(1104)
     if run.status != 'succeeded':
         raise ApiError(1303)
+    if run.review_snapshot and run.review_snapshot.get('prescreen'):
+        # 新任务只读取冻结的新状态、原文及文件标识，避免把兼容status误解为实施证据。
+        frozen = run.review_snapshot['prescreen']
+        values = [{**item, 'document': item.get('document_name', '')} for item in frozen['items']]
+        return build_questions(run_uid, values, run.review_snapshot)
     findings = ValidationDao.list_findings(db, run.id)
     # 一次 JOIN 获取本次任务的文件标识，无逐条查询。旧任务同类型多文档时不臆测证据所属文件。
     rows = db.execute(select(ValidationDocument.document_type, UploadedFile.original_name)

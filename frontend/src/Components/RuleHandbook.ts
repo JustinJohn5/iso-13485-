@@ -2,6 +2,7 @@ import { handbookApi } from '../Api/RuleHandbook';
 import type { HandbookRule, RuleHandbook, RuleSetSummary } from '../Types/RuleHandbook';
 import { escape } from '../Utils/Html';
 import '../Suites.css';
+import { factLabels } from '../Types/Prescreen';
 
 export class RuleHandbookPage {
   private sets: RuleSetSummary[] = [];
@@ -54,6 +55,7 @@ export class RuleHandbookPage {
       case 'present': return `正文匹配以下表达式，至少命中 ${check.min_matches} 次：\n${check.patterns.join('\n')}`;
       case 'absent': return `正文不得匹配以下表达式：\n${check.patterns.join('\n')}`;
       case 'all_terms': return `至少覆盖 ${check.min_groups ?? check.terms.length} 组词；同组任一词可命中：\n${check.terms.map(row => row.join(' / ')).join('\n')}`;
+      case 'requirements': return `按文件用途与章节核对要求要素；同组词提供同义线索：\n${(check.terms || []).map(row => row.join(' / ')).join('\n')}\n占位、否定及适用性未知须继续核实。`;
       case 'section': return `查找章节标题：${check.headings.join(' / ')}`;
       case 'length': return `抽取正文至少 ${check.min_chars} 个字符`;
       case 'date': return `查找日期：${check.patterns.join(' / ')}\n${check.not_future ? '不能晚于运行当天。' : ''}${check.max_age_days !== null ? `距运行当天不超过 ${check.max_age_days} 天。` : ''}`;
@@ -70,10 +72,10 @@ export class RuleHandbookPage {
     const words = this.query.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
     const rules = this.handbook.rules.filter(rule => (!this.clause || rule.clause === this.clause) &&
       (!this.type || rule.document_types.includes('*') || rule.document_types.includes(this.type)) &&
-      words.every(word => `${rule.rule_id} ${rule.title} ${rule.clause} ${rule.clause_title} ${rule.rationale} ${rule.suggestion} ${this.condition(rule)}`.toLocaleLowerCase().includes(word)));
+      words.every(word => `${rule.rule_id} ${rule.title} ${rule.clause} ${rule.clause_title} ${rule.rationale} ${rule.suggestion} ${rule.source || ''} ${(rule.topics || []).join(' ')} ${this.condition(rule)}`.toLocaleLowerCase().includes(word)));
     list.innerHTML = `<p>显示 ${rules.length} / ${this.handbook.rules.length} 条规则</p>` + (rules.map(rule => {
       const severity = this.handbook!.severities[rule.severity];
-      return `<article class="suite-finding"><h2>${escape(rule.rule_id)} · ${escape(rule.title)}</h2><p>条款 ${escape(rule.clause)} ${escape(rule.clause_title)} · ${escape(severity?.label || rule.severity)} · ${rule.per_document ? '逐份检查' : '同类合并检查'}</p><p>适用：${rule.document_types.includes('*') ? '所有文件' : rule.document_types.map(type => escape(this.label(type))).join('、')}</p><pre class="rule-check">${escape(this.condition(rule))}</pre><p><b>依据：</b>${escape(rule.rationale)}</p><p><b>建议：</b>${escape(rule.suggestion)}</p>${severity ? `<small>权重 ${severity.weight}${severity.score_cap !== null ? ` · 得分上限 ${severity.score_cap}` : ''}</small>` : ''}</article>`;
+      return `<article class="suite-finding" data-testid="handbook-rule-${escape(rule.rule_id)}"><h2>${escape(rule.rule_id)} · ${escape(rule.title)}</h2><p>条款 ${escape(rule.clause)} ${escape(rule.clause_title)} · ${escape(severity?.label || rule.severity)} · ${rule.per_document ? '逐份检查' : '同类合并检查'}</p><p>适用：${rule.document_types.includes('*') ? '所有文件' : rule.document_types.map(type => escape(this.label(type))).join('、')}</p>${rule.basis_kind ? `<p>依据类别：${rule.basis_kind === 'standard' ? '标准要求' : '项目约定'}</p>` : ''}${rule.source ? `<p>来源：${escape(typeof rule.source === 'object' ? JSON.stringify(rule.source) : rule.source)}</p>` : ''}<p>条件：${rule.conditions?.length ? rule.conditions.map(value => escape(factLabels[value] || value)).join('、') : '按文件范围与用途判断'}</p>${rule.uncertainty ? `<p>不确定事项：${escape(rule.uncertainty)}</p>` : ''}${rule.templates?.length ? `<p>关联模板：${rule.templates.map(escape).join('、')}</p>` : ''}<pre class="rule-check">${escape(this.condition(rule))}</pre><p><b>依据：</b>${escape(rule.rationale)}</p><p><b>建议：</b>${escape(rule.suggestion)}</p>${severity && !rule.basis_kind ? `<small>历史权重 ${severity.weight}${severity.score_cap !== null ? ` · 得分上限 ${severity.score_cap}` : ''}</small>` : ''}</article>`;
     }).join('') || '<p>未找到匹配规则，请调整检索条件。</p>');
   }
 }

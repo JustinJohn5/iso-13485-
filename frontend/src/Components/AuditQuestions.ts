@@ -7,7 +7,7 @@ interface AuditReport {
   questions: Array<{ id: string; kind: string; title: string; clause: string; document: string; evidence: string; question: string; action: string }>;
 }
 
-const labels: Record<string, string> = { gap: '规则缺项', reference: '引用待核对', conflict: '跨文件冲突', verification: '实施取证' };
+const labels: Record<string, string> = { gap: '文本缺口', reference: '引用待核对', conflict: '冲突待核对', verification: '实施取证', pending: '信息待补', unreadable: '文本无法判定', manual: '人工核实' };
 
 export function renderAuditQuestions(): string {
   return `<section class="section-block audit-report" data-testid="audit-panel"><div class="section-title"><div><h2>模拟内审</h2><p>基于本次预筛证据，整理提问、取证和整改方向。</p></div></div>

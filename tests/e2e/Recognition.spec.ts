@@ -9,15 +9,15 @@ test('自动识别质量手册并展示不同证据及合并条款', async ({ pa
   const result = await analyze(page);
   expect(result.documents[0].document_type).toBe('quality_manual');
   await expect(page.getByTestId('result-documents')).toContainText('质量手册');
-  await expect(page.getByTestId('evidence-DOC-001')).toHaveText('文件编号：QM-01');
-  await expect(page.getByTestId('evidence-DOC-002')).toHaveText('版本：01');
-  await expect(page.getByTestId('evidence-DOC-003')).toHaveText('批准');
-  await expect(page.getByTestId('evidence-DOC-004')).toHaveText('2020年02月01日发布');
+  await expect(page.getByTestId('evidence-DOC-001')).toContainText('文件编号：QM-01');
+  await expect(page.getByTestId('evidence-DOC-002')).toContainText('版本：01');
+  await expect(page.getByTestId('evidence-DOC-003')).toContainText('批准：负责人');
+  await expect(page.getByTestId('evidence-DOC-004')).toContainText('2020年02月01日发布');
   await expect(page.getByTestId('finding-DOC-001').locator('td[rowspan="4"]')).toHaveCount(1);
-  await expect(page.getByTestId('finding-QMS-001')).toBeVisible();
-  await expect(page.getByTestId('finding-MR-001')).not.toBeVisible();
+  await expect(page.getByTestId('finding-R-4.2.2')).toBeVisible();
+  await expect(page.getByTestId('finding-R-5.6.2')).not.toBeVisible();
   await page.getByTestId('toggle-skipped').click();
-  await expect(page.getByTestId('finding-MR-001')).toBeVisible();
+  await expect(page.getByTestId('finding-R-5.6.2')).toBeVisible();
   verifyDatabase(result.run_uid, 1, 'quality_manual');
   await page.getByTestId('reset-result').click();
   await expect(page.getByTestId('results')).toHaveCount(0);
@@ -45,6 +45,10 @@ test('正文识别和手动修正后重新判定使用最新类型', async ({ pa
 test('同内容不同文件名只计分一次', async ({ page }) => {
   const verify = watchPage(page);
   await login(page);
+  await page.getByTestId('upload-files').setInputFiles(textFile('质量手册基线.txt'));
+  await expect(page.getByTestId('file-detection-0')).toContainText('质量手册');
+  const baseline = await analyze(page);
+  await page.getByTestId('reset-result').click();
   await page.getByTestId('upload-files').setInputFiles([textFile('质量手册原件.txt'), textFile('质量手册副本.txt')]);
   await expect(page.getByTestId('file-detection-1')).toContainText('质量手册');
   const result = await analyze(page);
@@ -52,7 +56,8 @@ test('同内容不同文件名只计分一次', async ({ page }) => {
   expect(result.documents).toHaveLength(1);
   await expect(page.getByTestId('duplicate-note')).toContainText('已合并 1 份');
   await expect(page.getByTestId('finding-DOC-001')).toHaveCount(1);
-  await expect(page.getByTestId('active-count')).toHaveText('5');
+  await expect(page.getByTestId('active-count')).toHaveText(String(baseline.prescreen.coverage.denominator));
+  expect(result.prescreen.coverage).toEqual(baseline.prescreen.coverage);
   verifyDatabase(result.run_uid, 1, 'quality_manual');
   await verify();
 });
@@ -84,7 +89,7 @@ test('真实DOCX抽取后自动识别且非法类型修改被拒绝', async ({ p
   expect((await rejected.json()).code).toBe(1001);
   const result = await analyze(page);
   verifyDatabase(result.run_uid, 1, 'quality_manual');
-  await expect(page.getByTestId('evidence-DOC-001')).toHaveText('文件编号：QM-01');
+  await expect(page.getByTestId('evidence-DOC-001')).toContainText('文件编号：QM-01');
   await verify();
 });
 

@@ -13,7 +13,7 @@ test('预筛缺项及缺失引用生成内审清单并下载，其他用户不�
   const report = (await response.json()).data;
   expect(report.summary.gap).toBeGreaterThan(0);
   expect(report.summary.reference).toBe(1);
-  await expect(page.getByTestId('audit-summary')).toContainText('规则缺项');
+  await expect(page.getByTestId('audit-summary')).toContainText('文本缺口');
   await expect(page.getByTestId('audit-question-reference')).toContainText('QR-99');
   await expect(page.getByTestId('audit-question-gap').first()).toContainText('审核提问');
   const downloaded = page.waitForEvent('download');

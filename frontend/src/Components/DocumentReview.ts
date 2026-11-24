@@ -1,6 +1,11 @@
 import type { ControlMetadata, DocumentReview, MetadataChanges, RequirementConflict, VersionGroup } from '../Types/DocumentControl';
 import { escape } from '../Utils/Html';
 
+export function renderRequirementManual(review: DocumentReview): string {
+  const names = new Map(review.documents.map(row => [row.file_uid, row.name]));
+  return (review.requirement_manual || []).map(row => `<article class="control-conflict" data-testid="requirement-manual-${escape(row.number)}"><h3>保存期限待人工核实 · ${escape(row.number)}</h3><p>${escape(row.explanation)}</p>${row.facts.map(fact => `<blockquote>${escape(names.get(fact.file_uid) || fact.file_uid)} · 抽取文本第 ${escape(fact.line)} 行<br>${escape(fact.quote)}</blockquote>`).join('')}</article>`).join('');
+}
+
 const categories = { policy: 'a) 质量方针和质量目标', manual: 'b) 质量手册', required: 'c) 标准要求的程序和记录', organization: 'd) 组织所需文件和记录', regulatory: 'e) 适用法规要求的其他文件', unclassified: '待确认类别' };
 const layers = { document: '受控文件', template: '空白表单模板', record: '已填写记录', unknown: '层级待确认' };
 const statuses = { unknown: '批准状态待核实', controlled: '标注为现行/受控', draft: '草稿/待批准', obsolete: '已作废' };
@@ -40,8 +45,9 @@ export function renderDocumentReview(review: DocumentReview | null, asOf: string
     ${review ? `<p class="control-note" data-testid="review-status">${review.ready ? '冲突依据已确认，可继续预筛' : '存在未确认冲突，请选择依据并确认'} · 审查 ${escape(review.review_uid)} / 修订 ${review.revision}</p>
       ${review.version_groups.map((group) => `<article class="control-conflict" data-testid="version-${group.number}"><h3>同编号版本冲突 · ${escape(group.number)}</h3><p>${escape(group.explanation)}</p><ul>${group.file_uids.map((uid) => { const doc = review.documents.find((item) => item.file_uid === uid)!; return `<li>${name(uid)} · 版本 ${escape(doc.metadata.revision || '未知')} · 生效 ${escape(doc.metadata.effective_date || '未知')} · ${escape(statuses[doc.metadata.status as keyof typeof statuses] || doc.metadata.status)}${group.ineligible[uid] ? ` · ${escape(group.ineligible[uid])}` : ''}</li>`; }).join('')}</ul>${decisionForm(review, group, 'version', busy)}</article>`).join('')}
       ${review.requirement_conflicts.map((group) => `<article class="control-conflict" data-testid="requirement-${group.number}"><h3>跨文件要求冲突 · ${escape(group.number)} / ${escape(group.field)}</h3><p>${escape(group.explanation)}</p>${group.facts.map((fact) => `<blockquote>${name(fact.file_uid)} · 抽取文本第 ${fact.line} 行<br>${escape(fact.quote)}</blockquote>`).join('')}${decisionForm(review, group, 'requirement', busy)}</article>`).join('')}
+      ${renderRequirementManual(review)}
       <details class="reference-list" ${review.references.length ? 'open' : ''}><summary>编号引用对照（${review.references.length} 项）</summary>${review.references.map((ref) => `<p data-testid="reference-${escape(ref.number)}"><b>${name(ref.source_file_uid)} → ${escape(ref.number)}</b> · ${ref.status === 'missing' ? '本次未提供、待补充' : ref.status === 'pending' ? '候选或版本待确认' : '已找到编号候选，内容及指定版本仍需核对'}<small>抽取文本第 ${ref.line} 行：${escape(ref.quote)}</small></p>`).join('')}</details>
-      <p class="control-note">当前跨文件内容检查仅覆盖明确指向同一编号的数字保存期限，尚未覆盖全部职责、频次和语义冲突。确认记录用于本次预筛，不代替组织的受控批准与发布。</p>` : ''}</section>`;
+      <p class="control-note">当前跨文件内容检查仅覆盖明确指向同一编号的数字保存期限。期限起算事件或对象待核实时列为人工事项。确认记录用于本次预筛，不代替组织的受控批准与发布。</p>` : ''}</section>`;
 }
 
 export function bindReviewEvents(root: HTMLElement, onMetadata: (index: number, field: keyof MetadataChanges, value: string) => void,

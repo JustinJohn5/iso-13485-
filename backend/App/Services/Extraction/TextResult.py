@@ -9,6 +9,7 @@ MIN_TEXT_CHARS = 60
 
 STATUS_OK = "ok"
 STATUS_INSUFFICIENT = "insufficient"
+STATUS_PARTIAL = "partial"
 
 
 @dataclass
@@ -18,6 +19,7 @@ class TextResult:
     text: str
     page_count: int = 0
     warnings: list[str] = field(default_factory=list)
+    incomplete: bool = False
 
     @property
     def char_count(self) -> int:
@@ -25,7 +27,9 @@ class TextResult:
 
     @property
     def status(self) -> str:
-        return STATUS_OK if self.char_count >= MIN_TEXT_CHARS else STATUS_INSUFFICIENT
+        if self.char_count < MIN_TEXT_CHARS:
+            return STATUS_INSUFFICIENT
+        return STATUS_PARTIAL if self.incomplete else STATUS_OK
 
     def preview(self, limit: int = 800) -> str:
         """截取正文预览，供前端确认文件内容。"""

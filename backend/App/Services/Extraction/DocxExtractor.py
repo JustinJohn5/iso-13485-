@@ -44,4 +44,7 @@ def extract_docx(path: Path) -> TextResult:
             if joined:
                 lines.append(joined)
 
-    return TextResult(text="\n".join(lines), page_count=max(1, len(lines) // 40 + 1), warnings=warnings)
+    if document.inline_shapes:
+        warnings.append('文档含内嵌图片，图片中的文字及表格需查阅原件')
+    return TextResult(text="\n".join(lines), page_count=max(1, len(lines) // 40 + 1),
+                      warnings=warnings, incomplete=bool(warnings))

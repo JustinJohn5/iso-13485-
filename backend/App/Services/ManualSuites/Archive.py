@@ -5,6 +5,7 @@ import re
 from zipfile import ZipFile, ZIP_DEFLATED
 
 from App.Services.Authoring.WordExport import export_word
+from App.Services.ManualSuites.InspectionHistory import restore_findings, unpack_inspections
 from App.Utils.Errors import ApiError
 from App.Utils.FileGuard import ensure_inside, sanitize_filename
 
@@ -33,5 +34,8 @@ def build_archive(suite, upload_dir) -> bytes:
                                           file_version=item['file_version'], catalog_key=item['catalog_key'],
                                           origin=item['origin'], sha256=item['sha256'], archive_name=name))
         archive.writestr('目录.json', json.dumps(manifest, ensure_ascii=False, indent=2))
-        archive.writestr('检查结果.json', json.dumps(suite.inspection, ensure_ascii=False, indent=2))
+        current, history = unpack_inspections(suite.inspection, suite.revision)
+        archive.writestr('检查结果.json', json.dumps(restore_findings(current), ensure_ascii=False, indent=2))
+        if history:
+            archive.writestr('历史检查.json', json.dumps(history, ensure_ascii=False, indent=2))
     return output.getvalue()

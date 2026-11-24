@@ -21,10 +21,12 @@ from App.Models.ManualSuite import ManualSuite
 from App.Models.User import User
 from App.Schemas.ManualSuite import (SuiteCreate, SuiteGenerate, SuiteImport, SuiteInspection,
                                      SuiteItemUpdate, SuiteMutation)
+from App.Schemas.Prescreen import PrescreenContext, freeze_context
 from App.Services.ManualSuites.Archive import build_archive
 from App.Services.ManualSuites.Catalog import catalog
 from App.Services.ManualSuites.Content import generate_items, import_items, revise_item
 from App.Services.ManualSuites.Inspection import inspect_items
+from App.Services.ManualSuites.InspectionHistory import restore_findings, unpack_inspections
 from App.Utils.Errors import ApiError
 from App.Utils.Response import success
 from App.Utils.TimeUtils import to_iso
@@ -77,6 +79,16 @@ def detail(uid: str, db: Session = Depends(get_db), user: User = Depends(current
     return success(suite_response(accessible_suite(db, user, uid)))
 
 
+@router.get('/manual-suites/{uid}/inspections/{revision}')
+def inspection_detail(uid: str, revision: int, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    row = accessible_suite(db, user, uid)
+    current, history = unpack_inspections(row.inspection, row.revision)
+    report = next((item for item in [current, *history] if item and item['checked_revision'] == revision), None)
+    if report is None:
+        raise ApiError(1302, '未找到该修订的整套检查')
+    return success(restore_findings(report))
+
+
 @router.post('/manual-suites/{uid}/generations')
 def generate(uid: str, payload: SuiteGenerate, db: Session = Depends(get_db), user: User = Depends(current_user)):
     require_writer(user)
@@ -97,8 +109,6 @@ def import_files(uid: str, payload: SuiteImport, db: Session = Depends(get_db), 
         raise ApiError(1203)
     if user.role != 'admin' and any(file.uploaded_by != user.id for file in files):
         raise ApiError(1104)
-    if any(file.text_status != 'ok' for file in files):
-        raise ApiError(1204)
     by_uid = {file.file_uid: file for file in files}
     items = import_items(row.items, [by_uid[key] for key in payload.file_uids])
     return success(save_suite(db, user, row, payload.revision, items=items, action='suite_import'))
@@ -113,6 +123,8 @@ def read_item(uid: str, item_id: str, db: Session = Depends(get_db), user: User 
     result = {key: value for key, value in item.items() if key not in {'stored_name', 'snapshot'}}
     if item['origin'] == 'generated':
         result['sections'] = item['snapshot']['sections']
+        result['requirements_basis'] = item['snapshot'].get('requirements_basis')
+        result['generation_review'] = item['snapshot'].get('generation_review')
     return success(result)
 
 
@@ -140,7 +152,15 @@ def remove(uid: str, item_id: str, payload: SuiteMutation, db: Session = Depends
 def inspect(uid: str, payload: SuiteInspection, db: Session = Depends(get_db), user: User = Depends(current_user)):
     require_writer(user)
     row = accessible_suite(db, user, uid, payload.revision)
-    report = inspect_items(row.items, rule_loader().get(), payload.as_of_date.isoformat())
+    context = payload.context or PrescreenContext()
+    if context.as_of_date and context.as_of_date != payload.as_of_date:
+        raise ApiError(1001, '审核基准日不一致，请确认后重试')
+    context = context.model_copy(update={'as_of_date': payload.as_of_date})
+    try:
+        frozen = freeze_context(context, user_id=user.id, file_uids=[item['id'] for item in row.items])
+    except ValueError as exc:
+        raise ApiError(1001, '审核范围、条款或文件用途不合法') from exc
+    report = inspect_items(row.items, rule_loader().get(), payload.as_of_date.isoformat(), frozen)
     return success(save_suite(db, user, row, payload.revision, inspection=report, action='suite_inspect'))
 
 
