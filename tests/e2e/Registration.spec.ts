@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { watchPage } from './Helpers';
+import { inboxCode } from './EmailHelpers';
 
 const password = 'RegisterPass2026';
 const endpoint = '/api/v1/auth/register';
@@ -26,6 +27,10 @@ async function form(page: Page, address: string): Promise<void> {
   await page.getByTestId('register-email').fill(address);
   await page.getByTestId('register-password').fill(password);
   await page.getByTestId('register-confirm').fill(password);
+  const sent = page.waitForResponse(r => r.url().endsWith('/api/v1/auth/registration-codes'));
+  await page.getByTestId('register-send-code').click();
+  expect((await sent).status()).toBe(200);
+  await page.getByTestId('register-code').fill(inboxCode(address));
 }
 
 test('可在手机注册普通账号并登录，Cookie保持登录且无管理员权限', async ({ page }) => {
@@ -66,8 +71,8 @@ test('可在手机注册普通账号并登录，Cookie保持登录且无管理�
   await verify();
 });
 
-test('两次密码不一致或强度不足时保留表单，重复邮箱提示且不创建重复账号', async ({ page }) => {
-  const verify = watchPage(page, [{ path: endpoint, status: 409, code: 1107 }]);
+test('两次密码不一致或强度不足时保留表单，重复邮箱不创建重复账号', async ({ page }) => {
+  const verify = watchPage(page, [{ path: endpoint, status: 400, code: 1108 }]);
   const address = email();
   let requests = 0;
   page.on('request', r => { if (r.url().endsWith(endpoint)) requests += 1; });
@@ -90,10 +95,11 @@ test('两次密码不一致或强度不足时保留表单，重复邮箱提示�
   await page.getByTestId('register-email').fill(address.toUpperCase());
   await page.getByTestId('register-password').fill(password);
   await page.getByTestId('register-confirm').fill(password);
+  await page.getByTestId('register-code').fill('000000');
   const duplicate = page.waitForResponse(r => r.url().endsWith(endpoint));
   await page.getByTestId('register-submit').click();
-  expect((await duplicate).status()).toBe(409);
-  await expect(page.getByTestId('auth-error')).toContainText('邮箱已注册');
+  expect((await duplicate).status()).toBe(400);
+  await expect(page.getByTestId('auth-error')).toContainText('验证码');
   await expect(page.getByTestId('register-name')).toHaveValue('重复注册');
   await expect(page.getByTestId('register-password')).toHaveValue('');
   await expect(page.getByTestId('register-submit')).toBeEnabled();
@@ -106,7 +112,9 @@ test('两次密码不一致或强度不足时保留表单，重复邮箱提示�
 test('服务端拒绝弱密码、错误确认和权限字段，并发同邮箱只有一次成功', async ({ page }) => {
   const verify = watchPage(page);
   const address = email();
-  const data = { email: address, display_name: '注册测试用户', password, password_confirmation: password };
+  const sent = await page.request.post(process.env.E2E_API_BASE_URL + '/api/v1/auth/registration-codes', { data: { email: address } });
+  expect(sent.status()).toBe(200);
+  const data = { email: address, display_name: '注册测试用户', password, password_confirmation: password, email_verification_code: inboxCode(address) };
   for (const changes of [{ password: '12345678', password_confirmation: '12345678' },
     { password_confirmation: 'OtherPass2026' }, { role: 'admin' }, { email: 'invalid' }, { display_name: '   ' }]) {
     const rejected = await page.request.post(`${process.env.E2E_API_BASE_URL}${endpoint}`, { data: { ...data, ...changes } });
@@ -115,8 +123,14 @@ test('服务端拒绝弱密码、错误确认和权限字段，并发同邮箱�
   }
   database(address, 0);
   const responses = await Promise.all([1, 2].map(() => page.request.post(`${process.env.E2E_API_BASE_URL}${endpoint}`, { data })));
-  expect(responses.map(r => r.status()).sort()).toEqual([201, 409]);
-  for (const response of responses) expect((await response.json()).code).toBe(response.status() === 201 ? 0 : 1107);
+  expect(responses.filter(r => r.status() === 201)).toHaveLength(1);
+  for (const response of responses) {
+    if (response.status() === 201) expect((await response.json()).code).toBe(0);
+    else {
+      expect(response.status()).toBe(400);
+      expect((await response.json()).code).toBe(1108);
+    }
+  }
   database(address);
   await verify();
 });

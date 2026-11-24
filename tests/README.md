@@ -5,6 +5,7 @@
 - 沿用 Python 3.12.10 和项目虚拟环境。在 `backend` 目录执行 `python -m pip install -r requirements.lock`，需要时安装 `pytest`。单元测试不连接数据库。
 - 前端与根目录分别执行 `npm ci`，沿用 Node.js 26.13.1。根目录执行 `npx playwright install chromium`；已安装 Edge 时也可配置 `E2E_BROWSER_CHANNEL=msedge`。
 - E2E 使用 MySQL 8.4 的独立库（如 `iso13485_codextest`），先用当前发布版本初始化表。严禁使用开发或正式业务库。无需每次重建测试库。
+- `.env.test` 须配置 `E2E_SMTP_PORT=5425`（选择空闲端口）。测试入口临时启动仅监听本机的 STARTTLS SMTP 收件箱，动态生成授权值与证书，用真实发信模块收件；不会向真实邮箱投递。`tests/Helpers/MailSink.py` 依赖既有 `cryptography`，无需新增依赖。端口与开发、正式服务错开。
 - 复制根目录 `.env.test.example` 为 `.env.test`，填写测试连接串、随机密钥、前后端地址及端口。上传目录须在项目 `.local` 内；相对路径按后端目录解析。真实 `.env.test` 被 Git 忽略。
 
 ## 单元测试和构建
@@ -50,6 +51,7 @@ Windows 若出现 Playwright 转换缓存的 `EPERM`，可在专用测试终端�
 - `tests/e2e/IsoRules.spec.ts` 验证待补证据、体系范围、不适用说明、生成自检以及套册上下文持久化。单独运行时将该路径传给 `tests/RunE2e.py`。
 
 - `tests/Services/test_Registration.py`：邮箱及姓名规范化、密码强度与确认、UTF-8 72字节边界和权限字段拒绝；后端目录执行 `python -m pytest ../tests/Services/test_Registration.py -q`。
+- `tests/Services/test_EmailSender.py` 和 `test_ClientAddress.py`：SMTP TLS、失败脱敏、HMAC 摘要及可信代理地址解析；`tests/e2e/EmailVerification.spec.ts` 通过真实 STARTTLS SMTP 和 MySQL 验证注册、改密、普通登录无验证码、验证码过期/错误/旧码/邮箱与用途隔离、来源 IP 限流、公开邮箱隐私、单次使用及旧会话撤销。根目录运行 `python tests/RunE2e.py tests/e2e/EmailVerification.spec.ts tests/e2e/Registration.spec.ts tests/e2e/Auth.spec.ts`；加 `--headed` 可观察。`VerificationDatabase.py` 仅对本次随机邮箱前缀做状态核对和时间调整，`RateLimitDatabase.py` 仅预置或清除本轮生成的测试来源 IP 配额。
 - `tests/e2e/Registration.spec.ts`：390px注册、注册后登录及Cookie刷新保持、重复邮箱、表单错误、服务端权限与无效输入拒绝、并发去重；根目录执行 `python tests/RunE2e.py tests/e2e/Registration.spec.ts`。`tests/Helpers/RegistrationDatabase.py`核对真实MySQL密码哈希及审计。入口以随机前缀标识并清理本次注册账号及数据，禁止连接正式库。
 
 - `tests/e2e/RuleHandbook.spec.ts`：登录后阅读真实规则、按条款及关键词筛选、检查条件和建议；单项运行 `python tests/RunE2e.py tests/e2e/RuleHandbook.spec.ts`。最终全量验证：107项后端测试、23条E2E、TypeScript及Vite构建通过。

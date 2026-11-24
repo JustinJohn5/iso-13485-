@@ -6,6 +6,7 @@ from App.Dao.AuditLogDao import AuditLogDao
 from App.Dao.UserDao import UserDao
 from App.Models.User import ROLE_AUDITOR
 from App.Schemas.Registration import RegistrationRequest
+from App.Services.EmailVerification import REGISTRATION, consume_verification_code
 from App.Utils.Errors import ApiError
 from App.Utils.Logger import get_logger
 from App.Utils.Security import hash_password
@@ -15,6 +16,10 @@ logger = get_logger(__name__)
 
 def register_user(db: Session, payload: RegistrationRequest, ip_address: str) -> dict:
     try:
+        consume_verification_code(db, str(payload.email), REGISTRATION, payload.email_verification_code)
+        if UserDao.get_by_email(db, str(payload.email)) is not None:
+            db.commit()
+            raise ApiError(1108)
         user = UserDao.create(db, email=str(payload.email), display_name=payload.display_name,
                               password_hash=hash_password(payload.password.get_secret_value()), role=ROLE_AUDITOR)
         result = dict(id=user.id, email=user.email, display_name=user.display_name, role=user.role)
@@ -25,7 +30,7 @@ def register_user(db: Session, payload: RegistrationRequest, ip_address: str) ->
         db.rollback()
         if getattr(exc.orig, 'args', [None])[0] == 1062:
             logger.warning('注册拒绝：邮箱已注册')
-            raise ApiError(1107) from exc
+            raise ApiError(1108) from exc
         raise
     except (OperationalError, ProgrammingError) as exc:
         db.rollback()

@@ -7,11 +7,12 @@
 from __future__ import annotations
 
 import base64
+from ipaddress import ip_network
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import EmailStr, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # backend 目录（App/Config/Settings.py 向上两级）
@@ -61,6 +62,17 @@ class Settings(BaseSettings):
     jwt_secret: str = Field(alias="JWT_SECRET")
     jwt_expire_minutes: int = Field(default=480, alias="JWT_EXPIRE_MINUTES")
 
+    # ---------- 邮箱验证码 ----------
+    email_smtp_host: str | None = Field(default=None, alias="EMAIL_SMTP_HOST")
+    email_smtp_port: int | None = Field(default=None, alias="EMAIL_SMTP_PORT")
+    email_smtp_username: str | None = Field(default=None, alias="EMAIL_SMTP_USERNAME")
+    email_smtp_password: str | None = Field(default=None, alias="EMAIL_SMTP_PASSWORD", repr=False)
+    email_from_address: EmailStr | None = Field(default=None, alias="EMAIL_FROM_ADDRESS")
+    email_smtp_starttls: bool = Field(default=True, alias="EMAIL_SMTP_STARTTLS")
+    email_smtp_ssl: bool = Field(default=False, alias="EMAIL_SMTP_SSL")
+    email_smtp_timeout_seconds: int = Field(default=10, alias="EMAIL_SMTP_TIMEOUT_SECONDS")
+    trusted_proxy_cidrs: str = Field(default="", alias="TRUSTED_PROXY_CIDRS")
+
     # ---------- 文件与规则 ----------
     upload_dir: Path = Field(alias="UPLOAD_DIR")
     max_upload_size_mb: int = Field(default=40, alias="MAX_UPLOAD_SIZE_MB")
@@ -92,7 +104,27 @@ class Settings(BaseSettings):
     def access_token_ttl_seconds(self) -> int:
         return self.jwt_expire_minutes * 60
 
+    @property
+    def email_smtp_configured(self) -> bool:
+        return all((self.email_smtp_host, self.email_smtp_port, self.email_smtp_username,
+                    self.email_smtp_password, self.email_from_address))
+
     # ---------- 校验 ----------
+    @field_validator("email_smtp_host", "email_smtp_username", "email_from_address", mode="before")
+    @classmethod
+    def _normalize_smtp_field(cls, value):
+        if isinstance(value, str):
+            cleaned = value.strip()
+            if "\r" in cleaned or "\n" in cleaned:
+                raise ValueError("邮件配置不能包含换行符")
+            return cleaned or None
+        return value
+
+    @field_validator("email_smtp_password", "email_smtp_port", mode="before")
+    @classmethod
+    def _empty_smtp_field(cls, value):
+        return None if value == "" else value
+
     @field_validator("backend_port", "frontend_port")
     @classmethod
     def _check_port(cls, value: int | None) -> int | None:
@@ -148,6 +180,31 @@ class Settings(BaseSettings):
             raise ValueError("JWT_EXPIRE_MINUTES 必须在 5~43200 分钟之间")
         return int(value)
 
+    @field_validator("email_smtp_port")
+    @classmethod
+    def _check_smtp_port(cls, value: int | None) -> int | None:
+        if value is not None and not 1 <= int(value) <= 65535:
+            raise ValueError("EMAIL_SMTP_PORT 必须是 1~65535 之间的整数")
+        return value
+
+    @field_validator("email_smtp_timeout_seconds")
+    @classmethod
+    def _check_smtp_timeout(cls, value: int) -> int:
+        if not 1 <= int(value) <= 30:
+            raise ValueError("EMAIL_SMTP_TIMEOUT_SECONDS 必须在 1~30 秒之间")
+        return int(value)
+
+    @field_validator("trusted_proxy_cidrs")
+    @classmethod
+    def _check_trusted_proxy_cidrs(cls, value: str) -> str:
+        cidrs = [item.strip() for item in value.split(",") if item.strip()]
+        try:
+            for cidr in cidrs:
+                ip_network(cidr, strict=False)
+        except ValueError as exc:
+            raise ValueError("TRUSTED_PROXY_CIDRS 只能包含有效的 IP 地址或 CIDR 网段") from exc
+        return ",".join(cidrs)
+
     @field_validator("max_upload_size_mb")
     @classmethod
     def _check_upload_size(cls, value: int) -> int:
@@ -174,6 +231,14 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _check_dirs(self) -> "Settings":
+        smtp_fields = (self.email_smtp_host, self.email_smtp_port, self.email_smtp_username,
+                       self.email_smtp_password, self.email_from_address)
+        if any(smtp_fields) and not all(smtp_fields):
+            raise ValueError("邮件配置不完整，请填写 EMAIL_SMTP_HOST、PORT、USERNAME、PASSWORD 和 EMAIL_FROM_ADDRESS")
+        if self.email_smtp_ssl and self.email_smtp_starttls:
+            raise ValueError("EMAIL_SMTP_SSL 与 EMAIL_SMTP_STARTTLS 不能同时启用")
+        if self.email_smtp_configured and not (self.email_smtp_ssl or self.email_smtp_starttls):
+            raise ValueError("SMTP 邮件必须启用 SSL 或 STARTTLS 加密")
         if not self.rule_set_dir.exists():
             raise ValueError(f"规则包目录不存在：{self.rule_set_dir}")
         self.upload_dir.mkdir(parents=True, exist_ok=True)

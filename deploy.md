@@ -2,6 +2,9 @@
 
 ## 更新记录
 
+- 2026-11-24：验证码仅用于注册和修改密码，登录不变。新增 SMTP 配置、来源 IP 小时限流及可信代理设置，公开注册响应不暴露邮箱是否已注册。
+- 2026-11-24：注册验证码请求增加 MySQL 来源 IP 小时限流；统一邮箱是否已注册时的公开响应，并新增可信代理配置。迁移同时创建 `email_verification_ip_limits` 表。
+
 - 2026-11-24：登录页新增公开注册及 `POST /api/v1/auth/register`，默认普通使用账号（`auditor`），不开放管理员自注册。沿用用户表、密码哈希和登录 Cookie；发布时重启后端并重新构建前端，无新增依赖、环境变量或迁移。
 
 - 2026-11-24：新增登录可访问的规则手册页面和 `GET /api/v1/rule-sets/{id}` 规则详情接口；随前后端发布，沿用既有鉴权，无数据库迁移、依赖或环境变量变更。
@@ -453,6 +456,7 @@ sudo systemctl reload nginx
 | `MigrateDocumentDrafts.py` | 新增 `document_drafts` 表 | 是 |
 | `MigrateDocumentReviews.py` | 新增 `document_reviews` 表与 `validation_runs.review_snapshot` | 是（不删表重建） |
 | `MigrateManualSuites.py` | 新增 `manual_suites` 表 | 是 |
+| `MigrateEmailVerification.py` | 新增验证码与来源限流状态表 | 是 |
 
 标准流程（默认读 `backend/.env`；`--env-file` 可指定其他配置文件）：
 
@@ -477,21 +481,64 @@ cd /srv/iso/backend
 - `document_drafts`（1.2.0）：`MigrateDocumentDrafts.py`，仅建表，不改既有文件与预筛记录；回滚代码时保留新增表，避免丢失草稿。
 - `document_reviews`（1.1.0）：`MigrateDocumentReviews.py`；MySQL DDL 不保证事务回滚，部分失败时保留备份、确认表/列状态后重试。
 - `manual_suites`（1.3.0）：`MigrateManualSuites.py`，只建表，不改既有业务表；回退应用时保留新表与上传原件。
+- `email_verification_codes`、`email_verification_ip_limits`（本次）：`MigrateEmailVerification.py`，只建验证码与限流状态表；回退应用时保留表和审计，不删除用户数据。
 - 跨域配置新增 `DELETE`（移出套册成员），反向代理需放行。
 
 ## 四、环境变量清单
 
-- 后端：`APP_ENV`、`LOG_LEVEL`、`LOG_DIR`、`BACKEND_HOST`、`BACKEND_PORT`、`FRONTEND_PORT`、`CORS_ORIGINS`、`DATABASE_URL`、`DATABASE_POOL_SIZE`、`DATABASE_MAX_OVERFLOW`、`CONFIG_ENCRYPTION_KEY`、`JWT_SECRET`、`JWT_EXPIRE_MINUTES`、`UPLOAD_DIR`、`MAX_UPLOAD_SIZE_MB`、`RULE_SET_DIR`、`ACCESS_TOKEN_COOKIE_NAME`。
+- 后端：`APP_ENV`、`LOG_LEVEL`、`LOG_DIR`、`BACKEND_HOST`、`BACKEND_PORT`、`FRONTEND_PORT`、`CORS_ORIGINS`、`DATABASE_URL`、`DATABASE_POOL_SIZE`、`DATABASE_MAX_OVERFLOW`、`CONFIG_ENCRYPTION_KEY`、`JWT_SECRET`、`JWT_EXPIRE_MINUTES`、`UPLOAD_DIR`、`MAX_UPLOAD_SIZE_MB`、`RULE_SET_DIR`、`ACCESS_TOKEN_COOKIE_NAME`；SMTP 与可选 `TRUSTED_PROXY_CIDRS` 字段见 5.9。
 - 前端：`VITE_APP_TITLE`、`VITE_API_BASE_URL`、`FRONTEND_PORT`。这些值会暴露给浏览器，不得存放秘密。
 - 测试/E2E：复制根目录 `.env.test.example` 为 `.env.test`，配置独立 `APP_ENV=test`、MySQL 8.4 的 `_codextest` 库、测试密钥及上传目录。测试前后端使用 5400/8400，开发与正式服务使用其他端口。同一 MySQL 实例可提供独立测试库；单独部署测试实例时设置其实际端口。
 - 测试入口地址：`E2E_BASE_URL` 为测试前端，`E2E_API_BASE_URL` 和 `VITE_API_BASE_URL` 为测试后端，必须对应测试服务的地址和端口；`E2E_BROWSER_CHANNEL` 留空使用 Playwright Chromium，可填 `msedge` 使用本机 Edge。
+- `E2E_SMTP_PORT` 为本机隔离 STARTTLS 收件箱端口（示例 5425），不得与其他服务冲突。测试入口临时生成邮件账号、授权值、可信证书及收件目录，仅用于本次测试，不修改运行环境 SMTP，也不向外网转发。
 - `tests/RunE2e.py` 在子进程环境中临时注入随机 `E2E_EMAIL`、`E2E_PASSWORD` 和当前解释器路径 `E2E_PYTHON`；这些不是部署凭证，不写入仓库。准备、运行与清理方式见 `tests/README.md`。
 
 配置字段和端口示例见 `backend/.env.example` 与 `frontend/.env.example`。修改端口、加密密钥或跨域来源时需同步维护这两个示例文件。
 
 大模型的服务地址、模型、API Key、超时、最大输出 token 与温度**不是**环境变量，统一在网页「模型配置」中维护，仅存于 MySQL 并以 `CONFIG_ENCRYPTION_KEY` 加密；`.env` 不设同名配置或回退值。
 
+### 4.1 邮箱验证码环境变量
+
+验证码只用于注册和登录后的修改密码，登录本身不需要验证码。真实部署在后端 `.env` 配置 SMTP；以下字段不能放入前端环境变量：
+
+```ini
+EMAIL_SMTP_HOST=smtp.example.com
+EMAIL_SMTP_PORT=587
+EMAIL_SMTP_USERNAME=mailer@example.com
+EMAIL_SMTP_PASSWORD=请在服务器本地填写SMTP授权码
+EMAIL_FROM_ADDRESS=mailer@example.com
+EMAIL_SMTP_STARTTLS=true
+EMAIL_SMTP_SSL=false
+EMAIL_SMTP_TIMEOUT_SECONDS=10
+TRUSTED_PROXY_CIDRS=10.0.0.0/24,2001:db8::/48
+```
+
+`EMAIL_SMTP_STARTTLS` 与 `EMAIL_SMTP_SSL` 必须二选一，且服务端始终校验证书；端口常见组合是 STARTTLS/587 或 SSL/465，按邮件服务商要求填写。五个连接和身份字段全部留空时，后端仍可启动和登录，但发送验证码会返回“邮箱服务尚未配置”；只填写部分字段或使用非法端口会阻止启动并给出中文错误。SMTP 授权码不能使用 MySQL 密码替代。
+
+发布顺序：先在 `_codextest` 测试库执行 `MigrateEmailVerification.py` 并运行验证码 E2E，再迁移开发库；正式库须先获发布授权并添加 `--allow-production`。迁移后重启后端、重新构建前端。测试入口的 `E2E_SMTP_PORT` 只启动本机隔离收件箱，不配置到正式 `.env`，也不向外部邮箱转发。
+
+`TRUSTED_PROXY_CIDRS` 是可选项，填写直接连接后端的反向代理 IP/CIDR，多个值以逗号分隔；直连部署留空。只有 TCP 对端属于这些网段时，应用才会解析 `X-Forwarded-For`，并从右向左跳过可信代理。不要把用户可直接访问的网段配置为可信代理。来源限流按 IPv4 地址或 IPv6 `/64` 聚合，每个来源固定窗口每小时最多20次验证码请求；过期的 IP 摘要记录在后续请求中清理。
+
 ## 五、功能发布与使用边界
+
+### 5.9 注册与修改密码邮箱验证码
+
+注册流程先调用 `POST /api/v1/auth/registration-codes`，后端将一次性 6 位验证码发送到请求邮箱；`POST /api/v1/auth/register` 必须同时提交验证码。登录仍只需邮箱和密码。已登录用户调用 `POST /api/v1/auth/password-change-codes` 给当前账号邮箱发码，再用 `PATCH /api/v1/auth/password` 提交当前密码、新密码、确认密码和验证码。改密成功后删除当前 Cookie，并递增用户令牌版本，使其他旧会话同时失效。
+
+MySQL 表 `email_verification_codes` 只保存按邮箱和用途绑定的 HMAC 摘要、签发/过期/消费时间和次数，不保存明文验证码；`email_verification_ip_limits` 保存按服务端 JWT 密钥派生的来源 IP HMAC 摘要及限流计数，不保存原始 IP。验证码 10 分钟有效，60 秒内不能重发，每邮箱每用途每小时最多 5 次，每来源 IP 每小时最多 20 次，连续 5 次错误后失效，重发会让旧码失效且成功后只能消费一次。公开注册验证码请求对已注册与新邮箱返回相同响应；注册提交必须先提供有效验证码，重复邮箱返回通用验证码错误。发信失败不创建账号或修改密码。
+
+迁移验证命令（macOS/Ubuntu）：
+
+```bash
+cd /srv/iso/backend
+./.venv/bin/python MigrateEmailVerification.py --env-file ../.env.test
+cd ..
+./backend/.venv/bin/python tests/RunE2e.py tests/e2e/EmailVerification.spec.ts tests/e2e/Registration.spec.ts tests/e2e/Auth.spec.ts
+cd backend
+./.venv/bin/python MigrateEmailVerification.py
+```
+
+Windows 使用 `.venv/Scripts/python.exe`。正式库迁移使用正式 `.env` 并显式添加 `--allow-production`。部署后使用真实可收信邮箱手动测试注册邮件；测试收件箱仅验证本机 SMTP/TLS 和应用流程，不能替代外部邮件送达验证。
 
 ### 5.1 跨文档参数联动
 

@@ -1,6 +1,8 @@
 """ORM 模型包。"""
 
 from App.Models.AuditLog import AuditLog
+from App.Models.EmailVerificationCode import EmailVerificationCode
+from App.Models.EmailVerificationIpLimit import EmailVerificationIpLimit
 from App.Models.DocumentReview import DocumentReview
 from App.Models.DocumentDraft import DocumentDraft
 from App.Models.ManualSuite import ManualSuite
@@ -13,6 +15,8 @@ from App.Models.ValidationRun import ValidationRun
 
 __all__ = [
     "AuditLog",
+    "EmailVerificationCode",
+    "EmailVerificationIpLimit",
     "DocumentReview",
     "DocumentDraft",
     "ManualSuite",

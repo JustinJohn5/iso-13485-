@@ -40,6 +40,8 @@ def main() -> int:
     from App.Models.DocumentDraft import DocumentDraft
     from App.Models.ManualSuite import ManualSuite
     from App.Models.LlmConfig import LlmConfig
+    from App.Models.EmailVerificationCode import EmailVerificationCode
+    from App.Models.EmailVerificationIpLimit import EmailVerificationIpLimit
     from App.Utils.Security import hash_password
 
     settings = get_settings()
@@ -62,6 +64,8 @@ def main() -> int:
     migrate_drafts()
     from MigrateManualSuites import migrate as migrate_suites
     migrate_suites()
+    from MigrateEmailVerification import migrate as migrate_email
+    migrate_email()
 
     node = shutil.which('node')
     if not node:
@@ -71,7 +75,20 @@ def main() -> int:
     other_email = f'e2e-other-{secrets.token_hex(6)}@example.com'
     other_password = secrets.token_urlsafe(24)
     registration_prefix = f'reg-{secrets.token_hex(8)}'
+    if not config.get('E2E_SMTP_PORT'):
+        raise SystemExit('请在 .env.test 设置 E2E_SMTP_PORT（隔离 SMTP 测试收件箱端口）')
+    from Helpers.MailSink import MailSink
+    mail_dir = ROOT / '.local' / 'E2eMail' / registration_prefix
+    smtp_user, smtp_password = secrets.token_hex(8), secrets.token_urlsafe(24)
+    mail_sink = MailSink('127.0.0.1', int(config['E2E_SMTP_PORT']), mail_dir,
+                         smtp_user, smtp_password, registration_prefix)
+    mail_env = {'EMAIL_SMTP_HOST': '127.0.0.1', 'EMAIL_SMTP_PORT': config['E2E_SMTP_PORT'],
+                'EMAIL_SMTP_USERNAME': smtp_user, 'EMAIL_SMTP_PASSWORD': smtp_password,
+                'EMAIL_FROM_ADDRESS': 'no-reply@example.com', 'EMAIL_SMTP_STARTTLS': 'true',
+                'EMAIL_SMTP_SSL': 'false', 'EMAIL_SMTP_TIMEOUT_SECONDS': '5',
+                'SSL_CERT_FILE': str(mail_sink.cert_path), 'E2E_MAIL_DIR': str(mail_dir)}
     with session_scope() as db:
+        db.execute(delete(EmailVerificationIpLimit))
         llm_row = db.execute(select(LlmConfig).where(LlmConfig.name == 'default')).scalar_one_or_none()
         llm_backup = {column.name: getattr(llm_row, column.name) for column in LlmConfig.__table__.columns} if llm_row else None
         user = User(email=email, display_name='自动化测试账号', password_hash=hash_password(password), role=ROLE_ADMIN)
@@ -81,7 +98,7 @@ def main() -> int:
         db.flush()
         user_id = user.id
         user_ids = [user.id, other.id]
-    env = {**os.environ, 'E2E_EMAIL': email, 'E2E_PASSWORD': password, 'E2E_OTHER_EMAIL': other_email,
+    env = {**os.environ, **mail_env, 'E2E_EMAIL': email, 'E2E_PASSWORD': password, 'E2E_OTHER_EMAIL': other_email,
            'E2E_OTHER_PASSWORD': other_password, 'E2E_PYTHON': sys.executable,
            'E2E_REGISTRATION_PREFIX': registration_prefix}
     processes: list[subprocess.Popen] = []
@@ -119,6 +136,8 @@ def main() -> int:
                 process.wait(timeout=3)
         for output in logs:
             output.close()
+        mail_sink.close()
+        shutil.rmtree(mail_dir)
         with session_scope() as db:
             registered_ids = db.execute(select(User.id).where(User.email.like(registration_prefix + '-%@example.com'))).scalars().all()
             user_ids.extend(registered_ids)
@@ -140,6 +159,9 @@ def main() -> int:
             names = db.execute(select(UploadedFile.stored_name).where(UploadedFile.uploaded_by.in_(user_ids))).scalars().all()
             db.execute(delete(UploadedFile).where(UploadedFile.uploaded_by.in_(user_ids)))
             db.execute(delete(User).where(User.id.in_(user_ids)))
+            db.execute(delete(EmailVerificationCode).where(
+                EmailVerificationCode.email.like(registration_prefix + '-%@example.com')))
+            db.execute(delete(EmailVerificationIpLimit))
         for name in names:
             path = (settings.upload_dir / name).resolve()
             if path.parent == settings.upload_dir:

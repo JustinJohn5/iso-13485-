@@ -9,6 +9,7 @@ class RegistrationRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
     email: EmailStr = Field(max_length=190)
+    email_verification_code: str = Field(min_length=6, max_length=6, pattern=r"^[0-9]{6}$")
     display_name: str = Field(min_length=1, max_length=64)
     password: SecretStr = Field(min_length=8, max_length=72)
     password_confirmation: SecretStr = Field(min_length=8, max_length=72)
@@ -33,3 +34,13 @@ class RegistrationRequest(BaseModel):
         except ApiError as exc:
             raise ValueError(exc.message) from exc
         return self
+
+
+class RegistrationCodeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    email: EmailStr = Field(max_length=190)
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, value):
+        return value.strip().lower() if isinstance(value, str) else value

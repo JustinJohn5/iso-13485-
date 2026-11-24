@@ -3,7 +3,7 @@
 from App.Config.Settings import get_settings
 from App.Db.Base import Base
 from App.Db.Session import get_engine
-from App.Models import AuditLog, Finding, LlmConfig, UploadedFile, User, ValidationDocument, ValidationRun
+from App.Models import AuditLog, EmailVerificationCode, EmailVerificationIpLimit, Finding, LlmConfig, UploadedFile, User, ValidationDocument, ValidationRun
 from App.Utils.Logger import configure_logging, get_logger
 
 logger = get_logger(__name__)

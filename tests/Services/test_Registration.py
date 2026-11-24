@@ -6,7 +6,8 @@ from pydantic import ValidationError
 def registration(**changes):
     from App.Schemas.Registration import RegistrationRequest
     values = dict(email='  New.User@EXAMPLE.com  ', display_name='  新用户  ',
-                  password='RegisterPass2026', password_confirmation='RegisterPass2026')
+                  password='RegisterPass2026', password_confirmation='RegisterPass2026',
+                  email_verification_code='012345')
     return RegistrationRequest(**{**values, **changes})
 
 
@@ -42,3 +43,27 @@ def test_password_at_bcrypt_byte_limit_is_preserved():
     assert len(password.encode('utf-8')) == 72
     value = registration(password=password, password_confirmation=password)
     assert value.password.get_secret_value() == password
+
+
+@pytest.mark.parametrize('code', ['', '12345', '1234567', '12a456', '１２３４５６'])
+def test_registration_requires_six_ascii_digit_email_code(code):
+    with pytest.raises(ValidationError):
+        registration(email_verification_code=code)
+
+
+def test_password_change_requires_current_password_new_password_and_email_code():
+    from App.Schemas.PasswordChange import PasswordChangeRequest
+
+    payload = PasswordChangeRequest(current_password='CurrentPass2026', password='NewPass2026',
+                                    password_confirmation='NewPass2026', email_verification_code='012345')
+    assert payload.email_verification_code == '012345'
+    assert payload.password.get_secret_value() == 'NewPass2026'
+
+
+@pytest.mark.parametrize('code', ['', '12345', '1234567', '12a456', '１２３４５６'])
+def test_password_change_rejects_invalid_email_code(code):
+    from App.Schemas.PasswordChange import PasswordChangeRequest
+
+    with pytest.raises(ValidationError):
+        PasswordChangeRequest(current_password='CurrentPass2026', password='NewPass2026',
+                              password_confirmation='NewPass2026', email_verification_code=code)

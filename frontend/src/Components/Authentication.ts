@@ -1,6 +1,7 @@
 import { api, type User } from '../Api';
-import { register } from '../Api/Registration';
+import { register, sendRegistrationCode } from '../Api/Registration';
 import { escape } from '../Utils/Html';
+import { bindEmailCode, emailCodeFields, type EmailCodeState } from './EmailCode';
 import '../Authentication.css';
 
 export class AuthenticationPage {
@@ -8,10 +9,11 @@ export class AuthenticationPage {
   private email = '';
   private name = '';
   private busy = false;
+  private codeState: EmailCodeState = { until: 0 };
 
   constructor(private root: HTMLElement, private authenticated: (user: User) => Promise<void>) {}
 
-  showLogin(message = ''): void { this.render(message); }
+  showLogin(message = '', success = ''): void { this.render(message, success); }
 
   private render(error = '', success = ''): void {
     const signingUp = this.mode === 'register';
@@ -24,6 +26,7 @@ export class AuthenticationPage {
       <form class="login-form" data-testid="${prefix}-form">
         ${signingUp ? `<label>显示名称<input data-testid="register-name" name="display_name" autocomplete="name" required maxlength="64" value="${escape(this.name)}"></label>` : ''}
         <label>邮箱<input data-testid="${prefix}-email" name="email" type="email" autocomplete="username" required maxlength="190" autocapitalize="none" spellcheck="false" placeholder="name@company.com" value="${escape(this.email)}"></label>
+        ${signingUp ? emailCodeFields('register') : ''}
         <label>密码<input data-testid="${prefix}-password" name="password" type="password" autocomplete="${signingUp ? 'new-password' : 'current-password'}" required ${signingUp ? 'aria-describedby="password-help" maxlength="72"' : ''}></label>
         ${signingUp ? '<p class="auth-help" id="password-help">8～72位，须包含字母和数字；中文等多字节字符总计不超过72字节。</p><label>确认密码<input data-testid="register-confirm" name="password_confirmation" type="password" autocomplete="new-password" required maxlength="72"></label>' : ''}
         <p class="form-error" data-testid="auth-error" role="alert">${escape(error)}</p>
@@ -38,6 +41,16 @@ export class AuthenticationPage {
       this.name = ''; this.render();
     });
     this.root.querySelector('form')!.addEventListener('submit', event => { event.preventDefault(); void this.submit(); });
+    if (signingUp) {
+      bindEmailCode(this.root, 'register', this.codeState, async () => {
+        const email = this.root.querySelector<HTMLInputElement>('[name="email"]')!;
+        if (!email.reportValidity()) throw new Error('请输入有效邮箱地址');
+        return sendRegistrationCode(email.value.trim().toLowerCase());
+      }, message => { this.root.querySelector('[data-testid="auth-error"]')!.textContent = message; });
+      this.root.querySelector('[name="email"]')!.addEventListener('input', () => {
+        this.root.querySelector<HTMLInputElement>('[name="email_verification_code"]')!.value = '';
+      });
+    }
   }
 
   private async submit(): Promise<void> {
@@ -57,12 +70,14 @@ export class AuthenticationPage {
       if (message) { this.root.querySelector('[data-testid="auth-error"]')!.textContent = message; return; }
     }
     this.busy = true;
+    form.dataset.busy = 'true';
     const controls = this.root.querySelectorAll<HTMLInputElement | HTMLButtonElement>('input, button');
     controls.forEach(control => { control.disabled = true; });
     this.root.querySelector('[data-testid="auth-error"]')!.textContent = '';
     try {
       if (this.mode === 'register') {
-        const user = await register({ email: this.email, display_name: this.name, password, password_confirmation: confirmation });
+        const user = await register({ email: this.email, display_name: this.name, password, password_confirmation: confirmation,
+          email_verification_code: String(data.get('email_verification_code') || '') });
         this.email = user.email; this.name = ''; this.mode = 'login';
         this.render('', '注册成功，请登录');
       } else await this.authenticated(await api.login(this.email, password));
@@ -70,6 +85,7 @@ export class AuthenticationPage {
       this.render(error instanceof Error ? error.message : '请求失败，请重试');
     } finally {
       this.busy = false;
+      delete form.dataset.busy;
       controls.forEach(control => { control.disabled = false; });
     }
   }

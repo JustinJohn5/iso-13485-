@@ -3,6 +3,7 @@ import './document-control.css';
 import { api, type DocumentType, type TypeDetection, type User, type ValidationResult } from './Api';
 import { renderResult } from './Components/Results';
 import { AuthenticationPage } from './Components/Authentication';
+import { PasswordChangePage } from './Components/PasswordChange';
 import { escape } from './Utils/Html';
 import { bindReviewEvents, renderDocumentReview, renderMetadata } from './Components/DocumentReview';
 import type { ControlMetadata, DocumentReview, MetadataChanges } from './Types/DocumentControl';
@@ -29,11 +30,11 @@ let asOfDate = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toI
 let context = createPrescreenContext(asOfDate);
 let ruleSet: RuleSetSummary | undefined;
 
-function renderLogin(message = ''): void {
+function renderLogin(message = '', success = ''): void {
   new AuthenticationPage(root, async (authenticated) => {
     user = authenticated;
     await loadWorkspace();
-  }).showLogin(message);
+  }).showLogin(message, success);
 }
 
 function formatSize(bytes: number): string {
@@ -61,6 +62,7 @@ function render(): void {
         <button data-testid="suites-nav" class="nav-item" id="suites-nav"><span class="nav-symbol">▣</span>整套手册</button>
         ${user.role === 'admin' ? '<button data-testid="llm-settings-nav" class="nav-item" id="llm-settings-nav"><span class="nav-symbol">⚙</span>模型配置</button>' : ''}
         <button data-testid="rules-nav" class="nav-item" id="rules-nav"><span class="nav-symbol">≡</span>规则手册</button>
+        <button data-testid="change-password-nav" class="nav-item" id="change-password-nav"><span class="nav-symbol">○</span>修改密码</button>
         <div class="sidebar-bottom"><div class="standard-tag"><span class="status-dot"></span><span>规则包已就绪<small data-testid="workspace-rule-version">${escape(ruleSet?.standard || '')} · v${escape(ruleSet?.version || '—')}</small></span></div><button ${busy ? 'disabled' : ''} data-testid="logout" id="logout" class="logout">退出登录</button></div>
       </aside>
       <main class="main-content">
@@ -94,6 +96,14 @@ function render(): void {
 }
 
 function bindEvents(): void {
+  root.querySelector('#change-password-nav')?.addEventListener('click', () => {
+    if (busy || !user) return;
+    new PasswordChangePage(root, user, render, () => {
+      user = null; queue = []; result = null; documentReview = null; notice = '';
+      context = createPrescreenContext(asOfDate);
+      renderLogin('', '密码已修改，请重新登录');
+    }).open();
+  });
   bindPrescreenContext(root, context, (next, redraw) => {
     context = next; result = null;
     if (redraw) render(); else { root.querySelector('#result')?.remove(); root.querySelector('[data-testid="audit-panel"]')?.remove(); }
