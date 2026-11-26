@@ -3,7 +3,7 @@
 .auth-help { margin: -5px 0 0; color: #7e8b82; font-size: 11px; line-height: 1.7; }
 .auth-success { margin: 0 0 16px; }
 .email-verification { display: grid; gap: 8px; min-width: 0; }
-.email-code-row { display: flex; gap: 8px; align-items: stretch; }
-.email-code-row input { min-width: 0; flex: 1; }
-.email-code-row button { flex-shrink: 0; padding: 8px 12px; font-size: 12px; }
+.email-code-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: stretch; }
+.email-code-row input { width: 100%; min-width: 0; }
+.login-form .email-code-row .button { width: auto; margin-top: 0; padding: 8px 12px; font-size: 12px; }
 .password-email { display: block; overflow-wrap: anywhere; padding: 12px 0; font-size: 14px; }

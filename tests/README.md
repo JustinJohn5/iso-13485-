@@ -82,6 +82,7 @@ Windows 若出现 Playwright 转换缓存的 `EPERM`，可在专用测试终端�
 - `tests/Services/test_DocumentReview.py`：版本建议与人工选择、状态日期限制、记录实例、编号引用、保存期限及快照变化。
 - `tests/e2e/Helpers.ts`：登录、上传样本、网络与浏览器错误监测、数据库断言。
 - `tests/e2e/Auth.spec.ts`：专用账号登录和退出。
+- `tests/e2e/EmailCodeLayout.spec.ts`：注册和改密的验证码输入、发送按钮在1898px、390px和320px下完整可用；运行 `python tests/RunE2e.py tests/e2e/EmailCodeLayout.spec.ts`，沿用上述隔离服务与测试库配置。
 - `tests/e2e/Recognition.spec.ts`：自动识别、真实 DOCX 抽取、证据差异、条款合并、折叠、手动类型更新、重复计分、冲突拒绝、非法类型与移除。
 - `tests/e2e/DocumentReview.spec.ts`：正式版确认、候选排除、保留原件、跨文件期限、元数据校正、记录层级、并发过期和其他用户越权。通过 MySQL 读取验证已生成快照不会被后续确认覆盖，并有审计留痕。
 - `tests/Helpers/`：DOCX 样本生成和测试库只读验证；`tests/RunE2e.py`：环境与数据生命周期管理。

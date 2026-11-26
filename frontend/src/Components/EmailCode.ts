@@ -4,10 +4,10 @@ export interface EmailCodeState { until: number }
 
 export function emailCodeFields(prefix: string): string {
   return '<div class="email-verification">' +
-    '<label>邮箱验证码<div class="email-code-row">' +
-    '<input data-testid="' + prefix + '-code" name="email_verification_code" autocomplete="one-time-code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required placeholder="6位验证码">' +
-    '<button data-testid="' + prefix + '-send-code" class="button button-secondary" type="button">发送验证码</button></div></label>' +
-    '<p class="auth-help">验证码10分钟内有效，仅用于注册或修改密码。</p>' +
+    '<label for="' + prefix + '-verification-code">邮箱验证码</label><div class="email-code-row">' +
+    '<input id="' + prefix + '-verification-code" data-testid="' + prefix + '-code" name="email_verification_code" autocomplete="one-time-code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required placeholder="输入6位邮箱验证码" aria-describedby="' + prefix + '-code-help">' +
+    '<button data-testid="' + prefix + '-send-code" class="button button-secondary" type="button">发送验证码</button></div>' +
+    '<p class="auth-help" id="' + prefix + '-code-help">验证码10分钟内有效，仅用于注册或修改密码。</p>' +
     '<p data-testid="verification-notice" class="auth-help" role="status"></p></div>';
 }
 
