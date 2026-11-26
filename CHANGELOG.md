@@ -1,5 +1,12 @@
 # 更新日志
 
+## 2026-11-26 部署文档订正
+
+- docs(deploy): 数据库迁移章节补入 `MigrateAiReviews.py` 与 `ai_reviews`/`ai_review_decisions` 说明，并写明漏跑迁移时的 503/1502 表现与核对次序（涉及：deploy.md）
+- docs(deploy): 原与 AI 章节重号的「5.9 注册与修改密码邮箱验证码」调整为 4.2，环境变量章节与用户手册的指引改指 4.1、4.2（涉及：deploy.md、Docs/UserGuide.md、Docs/UserGuide.html）
+- docs(deploy): MySQL 端口示例由 3406/3407 订正为实际实例端口 3306，并说明开发库与测试库同实例按库名隔离（涉及：deploy.md、README.md、backend/.env.example、Docs/UserGuide.md、Docs/UserGuide.html）
+- 本次仅文档订正，无代码、依赖、端口或环境变量变更
+
 ## 2026-11-26 文件分组操作
 
 - feat(files): 新增分组内容选取、整组 ZIP 打包下载，以及上传文件时直接归入分组

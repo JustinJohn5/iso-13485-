@@ -2,8 +2,9 @@
 
 ## 更新记录
 
+- 2026-11-26：订正迁移与编号：`三、数据库迁移`补入 `MigrateAiReviews.py`、`ai_reviews`/`ai_review_decisions` 说明及缺表时的 503/1502 表现；原与 AI 章节重号的「5.9 注册与修改密码邮箱验证码」调整为 4.2，环境变量章节的指引同步改指 4.1、4.2；MySQL 端口示例按实际实例改为 3306（README、`backend/.env.example`、用户手册同步）。无代码、依赖、端口或环境变量变更。
 - 2026-11-26：新增账户菜单、个人文件与分组，以及 `/admin/` 管理后台；新增 `file_groups`、`file_group_members`、`visitors`、`visitor_daily` 表。先在 MySQL 8.4 `_codextest` 验证两项迁移与 E2E，再迁移开发库；正式库须取得发布授权。无新增环境变量、端口或依赖。
-- 2026-11-26：修复验证码输入布局并强化模型配置管理员复核；AI 审阅新增模型就绪检查与手动重试。后端缺表时返回503/1502及迁移提示，所有异常响应遵守既有 CORS 允许列表。按5.9节补齐既有迁移后重启后端、重新构建前端，无新增环境变量。
+- 2026-11-26：修复验证码输入布局并强化模型配置管理员复核；AI 审阅新增模型就绪检查与手动重试。后端缺表时返回503/1502及迁移提示，所有异常响应遵守既有 CORS 允许列表。按当时的邮箱验证码迁移说明（现 4.2 节）补齐既有迁移后重启后端、重新构建前端，无新增环境变量。
 - 2026-11-26：新增预筛结果中的 AI 查找依据、逐项审阅及人工决定追加留痕；API Key 沿用网页加密配置。新增 `ai_reviews` 与 `ai_review_decisions` 表，先在 `_codextest` 验证 `MigrateAiReviews.py`，再按授权流程迁移目标数据库；无新增环境变量、端口或依赖。
 - 2026-11-24：验证码仅用于注册和修改密码，登录不变。新增 SMTP 配置、来源 IP 小时限流及可信代理设置，公开注册响应不暴露邮箱是否已注册。
 - 2026-11-24：注册验证码请求增加 MySQL 来源 IP 小时限流；统一邮箱是否已注册时的公开响应，并新增可信代理配置。迁移同时创建 `email_verification_ip_limits` 表。
@@ -45,13 +46,13 @@
 | 数据库 | MySQL 8.4（迁移脚本强制校验 8.4） | `Migrate*.py` |
 | 依赖锁定 | `backend/requirements.lock`、`frontend/package-lock.json` | 安装只可用锁定文件 |
 
-| 环境 | 前端 | 后端 | MySQL 示例端口 |
+| 环境 | 前端 | 后端 | MySQL 端口 |
 |---|---:|---:|---:|
-| 本地开发 | 5300 | 8320 | 3406 |
-| 测试/E2E | 5400 | 8400 | 3407 |
+| 本地开发 | 5300 | 8320 | 3306 |
+| 测试/E2E | 5400 | 8400 | 3306（同一实例的 `_codextest` 库） |
 | 正式环境 | 5500（或 443 反代） | 8500 | 3306（仅私网） |
 
-更换端口只调整对应环境变量与代理配置，不改业务代码。
+MySQL 端口按实际实例填写：本机 `backend/.env` 与 `.env.test` 均为 3306，开发库 `iso13485` 与测试库 `iso13485_codextest` 是同一实例上的两个库，靠库名隔离；另建独立测试实例时才改为此实例端口。更换端口只调整对应环境变量与代理配置，不改业务代码。
 
 ### 1.3 域名与 Cookie 的同站约束（部署前必须确认）
 
@@ -460,8 +461,11 @@ sudo systemctl reload nginx
 | `MigrateEmailVerification.py` | 新增验证码与来源限流状态表 | 是 |
 | `MigratePersonalFiles.py` | 新增个人文件分组及成员引用表 | 是 |
 | `MigrateAdmin.py` | 新增访客状态与每日访问聚合表 | 是 |
+| `MigrateAiReviews.py` | 新增 `ai_reviews` 与 `ai_review_decisions` 表 | 是（只建缺失表） |
 
-标准流程（默认读 `backend/.env`；`--env-file` 可指定其他配置文件）：
+漏跑任一脚本的表现是接口返回 503 与业务码 `1502`（缺表 1146），AI 审阅面板会提示“数据库结构尚未升级”；按本节表格逐项核对已执行脚本，不要只看 `InitDb.py`。
+
+标准流程（默认读 `backend/.env`；`--env-file` 可指定其他配置文件；以下脚本名按本次要应用的迁移替换）：
 
 ```bash
 cd /srv/iso/backend
@@ -487,11 +491,12 @@ cd /srv/iso/backend
 - `email_verification_codes`、`email_verification_ip_limits`（本次）：`MigrateEmailVerification.py`，只建验证码与限流状态表；回退应用时保留表和审计，不删除用户数据。
 - `file_groups`、`file_group_members`：`MigratePersonalFiles.py`，只建个人分组及文件引用表，不迁移或删除原件。
 - `visitors`、`visitor_daily`：`MigrateAdmin.py`，只建访客状态和每日访问聚合表；启用前没有历史访问统计数据。
+- `ai_reviews`、`ai_review_decisions`（AI 文件阅读审核）：`MigrateAiReviews.py`，只建候选审阅与人工决定追加表，不改预筛记录、规则包或评分；AI 记录与规则评分相互独立，回退应用时保留新表与已有审阅留痕。
 - 跨域配置允许 `DELETE`，用于移出套册或文件分组成员；反向代理需放行。
 
 ## 四、环境变量清单
 
-- 后端：`APP_ENV`、`LOG_LEVEL`、`LOG_DIR`、`BACKEND_HOST`、`BACKEND_PORT`、`FRONTEND_PORT`、`CORS_ORIGINS`、`DATABASE_URL`、`DATABASE_POOL_SIZE`、`DATABASE_MAX_OVERFLOW`、`CONFIG_ENCRYPTION_KEY`、`JWT_SECRET`、`JWT_EXPIRE_MINUTES`、`UPLOAD_DIR`、`MAX_UPLOAD_SIZE_MB`、`RULE_SET_DIR`、`ACCESS_TOKEN_COOKIE_NAME`；SMTP 与可选 `TRUSTED_PROXY_CIDRS` 字段见 5.9。
+- 后端：`APP_ENV`、`LOG_LEVEL`、`LOG_DIR`、`BACKEND_HOST`、`BACKEND_PORT`、`FRONTEND_PORT`、`CORS_ORIGINS`、`DATABASE_URL`、`DATABASE_POOL_SIZE`、`DATABASE_MAX_OVERFLOW`、`CONFIG_ENCRYPTION_KEY`、`JWT_SECRET`、`JWT_EXPIRE_MINUTES`、`UPLOAD_DIR`、`MAX_UPLOAD_SIZE_MB`、`RULE_SET_DIR`、`ACCESS_TOKEN_COOKIE_NAME`；SMTP 与可选 `TRUSTED_PROXY_CIDRS` 字段见 4.1、4.2。
 - 前端：`VITE_APP_TITLE`、`VITE_API_BASE_URL`、`FRONTEND_PORT`。这些值会暴露给浏览器，不得存放秘密。
 - 测试/E2E：复制根目录 `.env.test.example` 为 `.env.test`，配置独立 `APP_ENV=test`、MySQL 8.4 的 `_codextest` 库、测试密钥及上传目录。测试前后端使用 5400/8400，开发与正式服务使用其他端口。同一 MySQL 实例可提供独立测试库；单独部署测试实例时设置其实际端口。
 - 测试入口地址：`E2E_BASE_URL` 为测试前端，`E2E_API_BASE_URL` 和 `VITE_API_BASE_URL` 为测试后端，必须对应测试服务的地址和端口；`E2E_BROWSER_CHANNEL` 留空使用 Playwright Chromium，可填 `msedge` 使用本机 Edge。
@@ -524,9 +529,7 @@ TRUSTED_PROXY_CIDRS=10.0.0.0/24,2001:db8::/48
 
 `TRUSTED_PROXY_CIDRS` 是可选项，填写直接连接后端的反向代理 IP/CIDR，多个值以逗号分隔；直连部署留空。只有 TCP 对端属于这些网段时，应用才会解析 `X-Forwarded-For`，并从右向左跳过可信代理。不要把用户可直接访问的网段配置为可信代理。来源限流按 IPv4 地址或 IPv6 `/64` 聚合，每个来源固定窗口每小时最多20次验证码请求；过期的 IP 摘要记录在后续请求中清理。
 
-## 五、功能发布与使用边界
-
-### 5.9 注册与修改密码邮箱验证码
+### 4.2 注册与修改密码邮箱验证码
 
 注册流程先调用 `POST /api/v1/auth/registration-codes`，后端将一次性 6 位验证码发送到请求邮箱；`POST /api/v1/auth/register` 必须同时提交验证码。登录仍只需邮箱和密码。已登录用户调用 `POST /api/v1/auth/password-change-codes` 给当前账号邮箱发码，再用 `PATCH /api/v1/auth/password` 提交当前密码、新密码、确认密码和验证码。改密成功后删除当前 Cookie，并递增用户令牌版本，使其他旧会话同时失效。
 
@@ -544,6 +547,8 @@ cd backend
 ```
 
 Windows 使用 `.venv/Scripts/python.exe`。正式库迁移使用正式 `.env` 并显式添加 `--allow-production`。部署后使用真实可收信邮箱手动测试注册邮件；测试收件箱仅验证本机 SMTP/TLS 和应用流程，不能替代外部邮件送达验证。
+
+## 五、功能发布与使用边界
 
 ### 5.1 跨文档参数联动
 

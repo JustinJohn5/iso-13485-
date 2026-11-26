@@ -25,7 +25,7 @@ pre { padding: 14px 16px; background: #f4f6f5; font: 12px/1.8 Consolas, monospac
 <p>5. 对照原始文件人工复核；再次检查可点击“新建预筛”。使用结束后点击“退出登录”。</p>
 <h3>本机信息</h3>
 <div class="table-wrap"><table><thead><tr><th scope="col">项目</th><th scope="col">当前值</th></tr></thead><tbody><tr><td>项目目录</td><td>D:/iso</td></tr><tr><td>网页地址</td><td>http://127.0.0.1:5300</td></tr><tr><td>后端地址</td><td>http://127.0.0.1:8320</td></tr><tr><td>MySQL 地址</td><td>127.0.0.1:3306</td></tr><tr><td>开发数据库</td><td>iso13485</td></tr><tr><td>独立测试数据库</td><td>iso13485_codextest</td></tr><tr><td>Windows 数据库服务名</td><td>MySQL84</td></tr></tbody></table></div>
-<p>这些是本机当前配置；环境示例与本机新版后端端口均为 8320，原 8300/8310 进程暂保留。README 和环境示例中的 MySQL 3406 是端口规划示例，不代表本机实际监听端口。移到另一台电脑时须按实际配置调整。</p>
+<p>这些是本机当前配置；环境示例与本机新版后端端口均为 8320。MySQL 端口与 backend/.env、.env.test、README.md 及部署文档保持一致（本机 3306），开发库与测试库是同实例上的 iso13485 / iso13485_codextest 两个库。移到另一台电脑时须按实际配置调整。</p>
 <h3>结果的使用边界</h3>
 <p>当前工具执行基础文本规则，不覆盖 ISO 13485 全部要求。文本命中不证明批准真实、记录完整或过程有效；任何得分均不构成认证、正式审核结论或法规符合性声明。</p>
 <h3>阅读导航</h3>
@@ -104,7 +104,7 @@ npm run dev</code></pre>
 <h3>管理员账号</h3>
 <p>注册时填写真实可收信邮箱，点击“发送验证码”，查收并输入6位验证码、显示名称、密码和确认密码；成功后返回登录。新账号为普通使用账号，登录仅输入邮箱与密码。</p>
 <p>登录后在工作区点击“修改密码”，同时验证当前密码和当前账号邮箱验证码，填写新密码并确认；修改成功后全部旧会话失效，需用新密码重新登录。验证码只用于注册和修改密码，10分钟有效、60秒重发间隔，每邮箱每用途每小时5次，连续输错5次失效，重发后旧码失效。</p>
-<p>真实邮件依赖后端 SMTP 配置；MySQL只保存验证码摘要和校验状态。邮件服务未配置时请联系管理员，配置步骤见 deploy.md 5.9。示例邮箱 admin@example.com 不能收取真实邮件。新增管理员仍由可信维护人员使用后端交互脚本，网页不开放管理员自注册。</p>
+<p>真实邮件依赖后端 SMTP 配置；MySQL只保存验证码摘要和校验状态。邮件服务未配置时请联系管理员，配置步骤见 deploy.md 4.1、4.2。示例邮箱 admin@example.com 不能收取真实邮件。新增管理员仍由可信维护人员使用后端交互脚本，网页不开放管理员自注册。</p>
 <p>Windows PowerShell：</p>
 <pre aria-label="powershell"><code>Set-Location D:/iso/backend
 ./.venv/Scripts/python.exe CreateAdmin.py</code></pre>
