@@ -107,7 +107,7 @@ export class AuthoringWorkspace {
       }).open();
     });
     this.root.querySelector('#open-llm-settings')?.addEventListener('click', () => {
-      void new LlmSettingsPage(this.root, () => { void this.run(async () => { this.aiReady = (await llmApi.status()).ready; }); }).open();
+      if (this.isAdmin) void new LlmSettingsPage(this.root, () => { void this.run(async () => { this.aiReady = (await llmApi.status()).ready; }); }).open();
     });
     this.root.querySelector<HTMLTextAreaElement>('#ai-instructions')?.addEventListener('input', (event) => { this.instructions = (event.target as HTMLTextAreaElement).value; });
     this.root.querySelector('#ai-draft')?.addEventListener('click', () => { void this.run(async () => {

@@ -36,3 +36,10 @@ def require_writer(user: User) -> User:
     if user.role not in {"admin", "auditor"}:
         raise ApiError(1104)
     return user
+
+
+def require_admin(user: User = Depends(current_user)) -> User:
+    """按数据库中的当前角色鉴权，不信任前端状态或令牌中的角色快照。"""
+    if user.role != "admin":
+        raise ApiError(1104, "仅管理员（admin）可查看和修改模型配置")
+    return user

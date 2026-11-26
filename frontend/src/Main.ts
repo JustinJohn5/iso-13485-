@@ -125,7 +125,7 @@ function bindEvents(): void {
     if (!busy) void new AuthoringWorkspace(root, render, user?.role === 'admin').open();
   });
   root.querySelector('#llm-settings-nav')?.addEventListener('click', () => {
-    if (!busy) void new LlmSettingsPage(root, render).open();
+    if (!busy && user?.role === 'admin') void new LlmSettingsPage(root, render).open();
   });
   const input = root.querySelector<HTMLInputElement>('#file-input')!;
   root.querySelector('#browse')!.addEventListener('click', () => input.click());

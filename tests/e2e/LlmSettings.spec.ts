@@ -2,6 +2,48 @@ import { test, expect } from '@playwright/test';
 import { spawnSync } from 'node:child_process';
 import { login, watchPage } from './Helpers';
 
+test('普通账号绕过导航打开模型配置时仍无编辑表单且接口拒绝修改', async ({ page, browser }) => {
+  await login(page);
+  const base = process.env.E2E_API_BASE_URL!;
+  const before = (await (await page.request.get(`${base}/api/v1/llm-settings`)).json()).data;
+  const context = await browser.newContext();
+  try {
+    const loggedIn = await context.request.post(`${base}/api/v1/auth/login`, {
+      data: { email: process.env.E2E_OTHER_EMAIL, password: process.env.E2E_OTHER_PASSWORD },
+    });
+    expect(loggedIn.status()).toBe(200);
+    const reviewer = await context.newPage();
+    const verify = watchPage(reviewer);
+    await reviewer.goto(process.env.E2E_BASE_URL!);
+    await expect(reviewer.getByTestId('upload-dropzone')).toBeVisible();
+    await expect(reviewer.getByTestId('llm-settings-nav')).toHaveCount(0);
+    // 模拟绕过导航直接进入页面，仍须通过服务端当前账号复核。
+    let configurationRequests = 0;
+    reviewer.on('request', request => { if (request.url().endsWith('/api/v1/llm-settings')) configurationRequests += 1; });
+    await reviewer.evaluate(async () => {
+      const path = '/src/Components/LlmSettings.ts';
+      const { LlmSettingsPage } = await import(path);
+      await new LlmSettingsPage(document.querySelector('#app'), () => {}).open();
+    });
+    expect(configurationRequests).toBe(0);
+    await expect(reviewer.getByTestId('llm-notice')).toContainText('仅管理员');
+    await expect(reviewer.getByTestId('save-llm-settings')).toHaveCount(0);
+    await expect(reviewer.getByTestId('llm-key')).toHaveCount(0);
+    for (const response of [
+      await context.request.get(`${base}/api/v1/llm-settings`),
+      await context.request.patch(`${base}/api/v1/llm-settings`, {
+        data: { enabled: false, base_url: `${base}/v1`, model: 'unauthorized', timeout_seconds: 5, max_tokens: 1000, temperature: 0 },
+      }),
+      await context.request.patch(`${base}/api/v1/llm-settings`, { data: {} }),
+    ]) {
+      expect(response.status()).toBe(403);
+      expect((await response.json()).code).toBe(1104);
+    }
+    expect((await (await page.request.get(`${base}/api/v1/llm-settings`)).json()).data).toEqual(before);
+    await verify();
+  } finally { await context.close(); }
+});
+
 test('管理员配置加密保存且不回显，AI 故障保留原草稿', async ({ page, browser }) => {
   await login(page);
   const base = process.env.E2E_API_BASE_URL!;

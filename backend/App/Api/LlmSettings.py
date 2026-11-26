@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from App.Api.Dependencies import current_user, require_writer
+from App.Api.Dependencies import current_user, require_admin, require_writer
 from App.Config.Settings import get_settings
 from App.Dao.AuditLogDao import AuditLogDao
 from App.Dao.LlmConfigDao import LlmConfigDao
@@ -33,16 +33,12 @@ def status(db: Session = Depends(get_db), user: User = Depends(current_user)):
 
 
 @router.get('/llm-settings')
-def read(db: Session = Depends(get_db), user: User = Depends(current_user)):
-    if user.role != 'admin':
-        raise ApiError(1104)
+def read(db: Session = Depends(get_db), user: User = Depends(require_admin)):
     return success(public_config(LlmConfigDao.get_default(db)))
 
 
 @router.patch('/llm-settings')
-def configure(payload: LlmSettingsUpdate, db: Session = Depends(get_db), user: User = Depends(current_user)):
-    if user.role != 'admin':
-        raise ApiError(1104)
+def configure(payload: LlmSettingsUpdate, db: Session = Depends(get_db), user: User = Depends(require_admin)):
     if get_settings().is_prod and not payload.base_url.startswith('https://'):
         raise ApiError(1001, '正式环境大模型服务地址必须使用 HTTPS')
     config = LlmConfigDao.get_or_create(db)

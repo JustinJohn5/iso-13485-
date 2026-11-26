@@ -1,4 +1,5 @@
 import { llmApi, type LlmConfig } from '../Api/Llm';
+import { api } from '../Api';
 import { escape } from '../Utils/Html';
 import { AUTHORING_LIMITS } from '../Constants/AuthoringLimits';
 import '../authoring.css';
@@ -8,13 +9,21 @@ export class LlmSettingsPage {
   private busy = false;
   private message = '';
   private failed = false;
+  private forbidden = false;
 
   constructor(private root: HTMLElement, private back: () => void) {}
 
   async open(): Promise<void> {
     window.scrollTo(0, 0);
+    this.config = null; this.message = ''; this.failed = false; this.forbidden = false;
     this.busy = true; this.render();
-    try { this.config = await llmApi.config(); }
+    try {
+      if ((await api.me()).role !== 'admin') {
+        this.forbidden = true;
+        throw new Error('仅管理员（admin）可查看和修改模型配置，请联系管理员。');
+      }
+      this.config = await llmApi.config();
+    }
     catch (error) { this.failed = true; this.message = error instanceof Error ? error.message : '配置读取失败'; }
     finally { this.busy = false; this.render(); }
   }
@@ -28,7 +37,7 @@ export class LlmSettingsPage {
           <div class="notice-bar"><span class="notice-icon">i</span><p>API Key 保存后仅显示配置状态，留空保留已有密钥。更换服务地址时须重新提交密钥；正式部署使用 HTTPS。</p></div>
           ${this.message ? `<p class="inline-notice ${this.failed ? 'is-error' : ''}" role="status" data-testid="llm-notice">${escape(this.message)}</p>` : ''}
           ${config ? `<section class="section-block authoring-editor"><form id="llm-settings-form" autocomplete="off"><fieldset class="authoring-fieldset" ${this.busy ? 'disabled' : ''}>
-            <label class="section-editor">启用 AI 辅助编写<input type="checkbox" id="llm-enabled" data-testid="llm-enabled" ${config.enabled ? 'checked' : ''}></label>
+            <label class="section-editor">启用 AI 编写与文件审阅<input type="checkbox" id="llm-enabled" data-testid="llm-enabled" ${config.enabled ? 'checked' : ''}></label>
             <div class="authoring-fields"><label>服务地址（包含服务商要求的 API 前缀）<input type="url" required maxlength="255" id="llm-url" data-testid="llm-url" value="${escape(config.base_url)}"></label>
               <label>模型标识<input required maxlength="128" id="llm-model" data-testid="llm-model" value="${escape(config.model)}"></label>
               <label>API Key<input type="password" autocomplete="new-password" maxlength="256" id="llm-key" data-testid="llm-key" value="" placeholder="${config.api_key_configured ? '已配置；留空保留' : '尚未配置'}"></label>
@@ -39,7 +48,7 @@ export class LlmSettingsPage {
             <p class="control-note" data-testid="llm-capacity-note">应用接受最多100万字符的总输入；字符数不等同于 token。实际输入与输出合计受所选模型上下文窗口约束，最大输出还受服务商限制，请按模型能力设置。</p>
             <button class="button button-primary" type="submit" data-testid="save-llm-settings">${this.busy ? '正在保存…' : '保存配置'}</button>
             <p class="control-note">最多重试1次；服务不可用时保留原草稿。保存配置仅校验字段，不代表已经连通服务；可在草稿中发起 AI 编写验证。</p>
-          </fieldset></form></section>` : this.busy ? '<p role="status">正在加载配置…</p>' : '<button class="button button-secondary" id="retry-settings">重新加载</button>'}
+          </fieldset></form></section>` : this.busy ? '<p role="status">正在加载配置…</p>' : this.forbidden ? '' : '<button class="button button-secondary" id="retry-settings">重新加载</button>'}
         </div></main></div>`;
     this.root.querySelector('#settings-back')?.addEventListener('click', this.back);
     this.root.querySelector('#retry-settings')?.addEventListener('click', () => { void this.open(); });
