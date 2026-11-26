@@ -22,7 +22,10 @@ from App.Services.Registration import register_user
 from App.Utils.Errors import ApiError
 from App.Utils.ClientAddress import resolve_client_ip
 from App.Utils.Response import success
-from App.Utils.Security import create_access_token, verify_password
+from App.Utils.Security import create_access_token, decode_access_token, verify_password
+from App.Dao.AuditLogDao import AuditLogDao
+from App.Services.VisitorTracking import clear_visitor_identity
+from App.Utils.TimeUtils import now
 
 router = APIRouter(prefix="/api/v1/auth", tags=["认证"])
 
@@ -76,6 +79,10 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
         raise ApiError(1101)
     if not user.is_active:
         raise ApiError(1106)
+    user.last_login_at = now()
+    AuditLogDao.add(db, user_id=user.id, action="user_login", target_type="user",
+                    target_id=str(user.id), detail="账号登录成功", ip_address="")
+    db.commit()
     token, ttl = create_access_token(user.id, user.token_version, user.role)
     settings = get_settings()
     response.set_cookie(
@@ -90,8 +97,29 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
     return success({"id": user.id, "email": user.email, "display_name": user.display_name, "role": user.role})
 
 
+def _logout_user(request: Request, db: Session) -> User | None:
+    """仅把仍有效且未撤销的会话关联到退出审计事件。"""
+    token = request.cookies.get(get_settings().access_token_cookie_name)
+    if not token:
+        return None
+    try:
+        payload = decode_access_token(token)
+        user = UserDao.get_by_id(db, int(payload["sub"]))
+    except (ApiError, KeyError, TypeError, ValueError, OverflowError):
+        return None
+    if user is None or not user.is_active or user.token_version != payload.get("ver"):
+        return None
+    return user
+
+
 @router.post("/logout")
-def logout(response: Response):
+def logout(request: Request, response: Response, db: Session = Depends(get_db)):
+    user = _logout_user(request, db)
+    clear_visitor_identity(request, db)
+    if user:
+        AuditLogDao.add(db, user_id=user.id, action="user_logout", target_type="user",
+                        target_id=str(user.id), detail="账号退出登录成功", ip_address=_client_ip(request))
+    db.commit()
     response.delete_cookie(get_settings().access_token_cookie_name, path="/")
     return success(message="已退出登录")
 

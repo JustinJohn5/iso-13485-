@@ -48,6 +48,8 @@ Windows 若出现 Playwright 转换缓存的 `EPERM`，可在专用测试终端�
 
 ## 目录及覆盖范围
 
+- 后台测试：后端目录运行 `python -m pytest ../tests/Services/test_AdminLogs.py ../tests/Services/test_VisitorTracking.py ../tests/Api/test_Admin.py ../tests/Api/test_AdminAudit.py ../tests/Api/test_AuthAuditing.py ../tests/Api/test_ProductRoutes.py -q`，覆盖访客聚合、日志受控读取与脱敏、管理员权限、认证审计及路由集成。数据库用例沿用 MySQL 8.4 `_codextest`，不使用 SQLite。
+
 - `tests/Services/test_PersonalFiles.py`：本人文件查询、所有权隔离、分组及批量成员管理。后端目录运行 `python -m pytest ../tests/Services/test_PersonalFiles.py -q`，沿用 MySQL 8.4 `_codextest` 测试副本。
 
 - `test_RequirementCatalog.py` 核对 72 项条款和 20 项生成映射。`test_GenerationRules.py` 核对条款依据、自检和修订。`test_Prescreen.py` 覆盖条件、受控引用、否定表述、部分抽取、证据保留和覆盖率。

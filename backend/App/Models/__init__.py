@@ -14,6 +14,7 @@ from App.Models.ValidationDocument import ValidationDocument
 from App.Models.ValidationRun import ValidationRun
 from App.Models.AiReview import AiReview, AiReviewDecision
 from App.Models.FileGroup import FileGroup, FileGroupMember
+from App.Models.Visitor import Visitor, VisitorDaily
 
 __all__ = [
     "AuditLog",
@@ -32,4 +33,6 @@ __all__ = [
     "AiReviewDecision",
     "FileGroup",
     "FileGroupMember",
+    "Visitor",
+    "VisitorDaily",
 ]

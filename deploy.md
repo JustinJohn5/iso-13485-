@@ -2,6 +2,7 @@
 
 ## 更新记录
 
+- 2026-11-26：新增访客跟踪及后台服务接口；MySQL 8.4 先在 `_codextest` 验证 `MigrateAdmin.py`，再迁移开发库。无新增环境变量。
 - 2026-11-26：新增本人文件与分组接口，MySQL 8.4 通过 `MigratePersonalFiles.py` 创建分组及成员表，先在 `_codextest` 验证；正式库须发布授权。无新增环境变量。
 - 2026-11-26：新增预筛结果中的 AI 查找依据、逐项审阅及人工决定追加留痕；API Key 沿用网页加密配置。新增 `ai_reviews` 与 `ai_review_decisions` 表，先在 `_codextest` 验证 `MigrateAiReviews.py`，再按授权流程迁移目标数据库；无新增环境变量、端口或依赖。
 - 2026-11-24：验证码仅用于注册和修改密码，登录不变。新增 SMTP 配置、来源 IP 小时限流及可信代理设置，公开注册响应不暴露邮箱是否已注册。
@@ -460,6 +461,7 @@ sudo systemctl reload nginx
 | `MigrateManualSuites.py` | 新增 `manual_suites` 表 | 是 |
 | `MigrateEmailVerification.py` | 新增验证码与来源限流状态表 | 是 |
 | `MigratePersonalFiles.py` | 新增个人文件分组及成员引用表 | 是 |
+| `MigrateAdmin.py` | 新增访客状态与每日访问聚合表 | 是 |
 
 标准流程（默认读 `backend/.env`；`--env-file` 可指定其他配置文件）：
 
@@ -652,3 +654,7 @@ AI 来源和模型标识保存在修订快照；不自动填写批准、生效�
 ### 5.10 个人文件与分组迁移
 
 既有 MySQL 8.4 数据库先在测试副本验证：在后端目录执行 `.venv/bin/python MigratePersonalFiles.py --env-file ../.env.test`。Windows 使用 `.venv/Scripts/python.exe`。测试通过后迁移开发库并重启后端；正式库仅在获得发布授权后使用正式配置并附加 `--allow-production`。迁移只建分组及成员引用表，删除分组不会删除原件。
+
+### 5.11 访客与后台服务迁移
+
+在后端目录执行 `.venv/bin/python MigrateAdmin.py --env-file ../.env.test`，Windows 使用 `.venv/Scripts/python.exe`。测试通过后迁移开发库并重启后端；正式库仅在获得发布授权后使用正式配置并附加 `--allow-production`。只新增访客与每日聚合表；在线窗口5分钟，统计从启用后开始，不保存原始 Cookie 或访客 IP。后台接口独立校验管理员角色，日志限制在配置目录内并脱敏返回。
