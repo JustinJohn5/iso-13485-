@@ -3,10 +3,11 @@ import type { Draft, DraftSummary, Template } from '../Types/Authoring';
 import { escape } from '../Utils/Html';
 import '../authoring.css';
 import { llmApi } from '../Api/Llm';
-import { LlmSettingsPage } from './LlmSettings';
 import { DraftBatchPanel } from './DraftBatch';
 import { AUTHORING_LIMITS } from '../Constants/AuthoringLimits';
 import { renderGenerationReview } from './GenerationReview';
+import { AccountMenu } from './AccountMenu';
+import { api } from '../Api';
 
 export class AuthoringWorkspace {
   private templates: Template[] = [];
@@ -24,7 +25,7 @@ export class AuthoringWorkspace {
   private aiReady = false;
   private instructions = '';
 
-  constructor(private root: HTMLElement, private back: () => void, private isAdmin = false) {}
+  constructor(private root: HTMLElement, private back: () => void, private user?: import('../Api').User) {}
 
   async open(): Promise<void> {
     window.scrollTo(0, 0);
@@ -62,7 +63,7 @@ export class AuthoringWorkspace {
       <aside class="sidebar"><a class="brand" href="#"><span class="brand-mark">Q</span><span><b>QMS</b><small>DOCUMENT AUTHORING</small></span></a>
         <div class="side-label">工作区</div><button class="nav-item" data-testid="precheck-nav" id="back-precheck" ${this.busy ? 'disabled' : ''}>▦ 文件预筛</button>
         <button class="nav-item active" data-testid="templates-nav">▤ 模板与编写</button><div class="sidebar-bottom"><p class="control-note">项目模板库<br>生成、复核、修订、导出</p></div></aside>
-      <main class="main-content"><header class="topbar"><div class="breadcrumb">工作区 <span>/</span><b>模板与编写</b></div><span>草稿工作区</span></header>
+      <main class="main-content"><header class="topbar"><div class="breadcrumb">工作区 <span>/</span><b>模板与编写</b></div><div class="account-anchor" data-testid="account-anchor"></div></header>
         <div class="content-wrap authoring-wrap"><section class="page-heading"><div><p class="eyebrow">DOCUMENT AUTHORING</p><h1>模板与编写</h1><p>查找模板，填写项目参数，生成并修订技术文件。</p></div></section>
           <div class="notice-bar"><span class="notice-icon">i</span><p>模板为项目自有示例；生成文件保留草稿状态，批准、生效、检验限值及事实数据须人工核实。</p></div>
           ${this.message ? `<p data-testid="authoring-notice" class="inline-notice ${this.failed ? 'is-error' : ''}" role="status">${escape(this.message)}</p>` : ''}
@@ -82,7 +83,6 @@ export class AuthoringWorkspace {
                 <p class="control-note" data-testid="draft-origin">来源：${this.draft.snapshot.origin === 'ai' ? 'AI 辅助编写' : this.draft.snapshot.origin === 'manual' ? '人工修订' : '参数化模板'} · 待人工复核</p>
                 ${renderGenerationReview(this.draft.snapshot)}
                 <div class="ai-draft-panel"><h3>AI 辅助编写</h3><p class="control-note" data-testid="ai-status">${this.aiReady ? '模型已启用；将向配置的服务发送已保存草稿和编写要求，请确认资料允许发送。AI 会覆盖当前章节并保存为新修订。' : '模型尚未启用，可先使用模板和人工编辑。'}所有生成内容均需人工复核。</p>
-                  ${this.isAdmin ? '<button type="button" class="text-button" id="open-llm-settings" data-testid="open-llm-settings">管理模型配置</button>' : ''}
                   <label class="section-editor">编写要求（最多3万字符）<textarea rows="3" maxlength="${AUTHORING_LIMITS.instructions}" data-testid="ai-instructions" id="ai-instructions" placeholder="例如：细化检验步骤，缺失限值标记待确认">${escape(this.instructions)}</textarea></label>
                   <button type="button" class="button button-secondary" id="ai-draft" data-testid="ai-draft" ${!this.aiReady ? 'disabled' : ''}>按已保存草稿进行 AI 编写</button></div>
                 <form id="sections-form">${this.draft.snapshot.sections.map((section) => `<label class="section-editor">${escape(section.title)}<textarea required rows="5" maxlength="${AUTHORING_LIMITS.section}" data-section="${section.id}" data-testid="section-${section.id}">${escape(this.sections[section.id] || '')}</textarea></label>`).join('')}
@@ -99,15 +99,14 @@ export class AuthoringWorkspace {
   }
 
   private bind(): void {
+    const accountAnchor = this.root.querySelector<HTMLElement>('[data-testid="account-anchor"]');
+    if (accountAnchor && this.user) new AccountMenu(accountAnchor, this.user, () => { location.href = '/admin/'; }, async () => { await api.logout().catch(() => undefined); location.href = '/'; });
     this.root.querySelector('#open-batch')?.addEventListener('click', () => {
       void new DraftBatchPanel(this.root.querySelector<HTMLElement>('#batch-container')!, async () => {
         this.drafts = await authoringApi.drafts();
         if (this.draft) this.useDraft(await authoringApi.draft(this.draft.draft_uid));
         this.message = '所选草稿参数已联动，旧修订保留。'; this.render();
       }).open();
-    });
-    this.root.querySelector('#open-llm-settings')?.addEventListener('click', () => {
-      if (this.isAdmin) void new LlmSettingsPage(this.root, () => { void this.run(async () => { this.aiReady = (await llmApi.status()).ready; }); }).open();
     });
     this.root.querySelector<HTMLTextAreaElement>('#ai-instructions')?.addEventListener('input', (event) => { this.instructions = (event.target as HTMLTextAreaElement).value; });
     this.root.querySelector('#ai-draft')?.addEventListener('click', () => { void this.run(async () => {

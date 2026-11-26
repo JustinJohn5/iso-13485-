@@ -4,12 +4,10 @@ import { api, type DocumentType, type TypeDetection, type User, type ValidationR
 import { renderResult } from './Components/Results';
 import { bindAiReviewEvents } from './Components/AiReview';
 import { AuthenticationPage } from './Components/Authentication';
-import { PasswordChangePage } from './Components/PasswordChange';
 import { escape } from './Utils/Html';
 import { bindReviewEvents, renderDocumentReview, renderMetadata } from './Components/DocumentReview';
 import type { ControlMetadata, DocumentReview, MetadataChanges } from './Types/DocumentControl';
 import { AuthoringWorkspace } from './Components/Authoring';
-import { LlmSettingsPage } from './Components/LlmSettings';
 import { bindAuditQuestions, renderAuditQuestions } from './Components/AuditQuestions';
 import { ManualSuitesPage } from './Components/ManualSuites';
 import { RuleHandbookPage } from './Components/RuleHandbook';
@@ -17,6 +15,9 @@ import { bindPrescreenContext, createPrescreenContext, purposeSelect, renderPres
 import type { DocumentPurpose } from './Types/Prescreen';
 import { handbookApi } from './Api/RuleHandbook';
 import type { RuleSetSummary } from './Types/RuleHandbook';
+import { AccountMenu } from './Components/AccountMenu';
+import { startVisitorTracking, stopVisitorTracking } from './Utils/VisitorTracking';
+import { personalFilesApi } from './Api/PersonalFiles';
 
 type QueueItem = { file: File; type: string; purpose: DocumentPurpose; uid?: string; error?: string; detection?: TypeDetection; warnings?: string[]; metadata?: ControlMetadata; changes?: MetadataChanges };
 const root = document.querySelector<HTMLDivElement>('#app')!;
@@ -32,6 +33,7 @@ let context = createPrescreenContext(asOfDate);
 let ruleSet: RuleSetSummary | undefined;
 
 function renderLogin(message = '', success = ''): void {
+  startVisitorTracking(false, '/login');
   new AuthenticationPage(root, async (authenticated) => {
     user = authenticated;
     await loadWorkspace();
@@ -61,13 +63,11 @@ function render(): void {
         <button data-testid="precheck-nav" class="nav-item active"><span class="nav-symbol">▦</span>文件预筛</button>
         <button data-testid="templates-nav" class="nav-item" id="templates-nav"><span class="nav-symbol">▤</span>模板与编写</button>
         <button data-testid="suites-nav" class="nav-item" id="suites-nav"><span class="nav-symbol">▣</span>整套手册</button>
-        ${user.role === 'admin' ? '<button data-testid="llm-settings-nav" class="nav-item" id="llm-settings-nav"><span class="nav-symbol">⚙</span>模型配置</button>' : ''}
         <button data-testid="rules-nav" class="nav-item" id="rules-nav"><span class="nav-symbol">≡</span>规则手册</button>
-        <button data-testid="change-password-nav" class="nav-item" id="change-password-nav"><span class="nav-symbol">○</span>修改密码</button>
         <div class="sidebar-bottom"><div class="standard-tag"><span class="status-dot"></span><span>规则包已就绪<small data-testid="workspace-rule-version">${escape(ruleSet?.standard || '')} · v${escape(ruleSet?.version || '—')}</small></span></div><button ${busy ? 'disabled' : ''} data-testid="logout" id="logout" class="logout">退出登录</button></div>
       </aside>
       <main class="main-content">
-        <header class="topbar"><div class="breadcrumb">工作区 <span>/</span> <b>文件预筛</b></div><div class="account"><span class="account-avatar">${escape((user.display_name || user.email).slice(0, 1).toUpperCase())}</span><span>${escape(user.display_name || user.email)}<small>${escape(user.role)}</small></span></div></header>
+        <header class="topbar"><div class="breadcrumb">工作区 <span>/</span> <b>文件预筛</b></div><div class="account-anchor" data-testid="account-anchor"></div></header>
         <div class="content-wrap">
           <section class="page-heading"><div><p class="eyebrow">DOCUMENT COMPLIANCE</p><h1>文件预筛</h1><p>基于文本规则检查文件结构与关键内容，辅助质量体系自查。</p></div><div class="standard-pill"><span class="status-dot"></span>ISO 13485:2016</div></section>
           <div class="notice-bar"><span class="notice-icon">i</span><p>预筛结果仅用于内部文件检查，不构成认证、审核结论或法规符合性声明。</p><a href="#rule-note" id="notice-link">了解边界</a></div>
@@ -97,14 +97,11 @@ function render(): void {
 }
 
 function bindEvents(): void {
-  root.querySelector('#change-password-nav')?.addEventListener('click', () => {
-    if (busy || !user) return;
-    new PasswordChangePage(root, user, render, () => {
-      user = null; queue = []; result = null; documentReview = null; notice = '';
-      context = createPrescreenContext(asOfDate);
-      renderLogin('', '密码已修改，请重新登录');
-    }).open();
+  const anchor = root.querySelector<HTMLElement>('[data-testid="account-anchor"]');
+  if (anchor && user) new AccountMenu(anchor, user, () => { location.href = '/admin/'; }, async () => {
+    await api.logout().catch(() => undefined); stopVisitorTracking(); user = null; queue = []; result = null; documentReview = null; context = createPrescreenContext(asOfDate); renderLogin();
   });
+  startVisitorTracking(true, '/prescreen');
   bindPrescreenContext(root, context, (next, redraw) => {
     context = next; result = null;
     if (redraw) render(); else { root.querySelector('#result')?.remove(); root.querySelector('[data-testid="audit-panel"]')?.remove(); }
@@ -117,15 +114,12 @@ function bindEvents(): void {
     render();
   }));
   root.querySelector('#suites-nav')?.addEventListener('click', () => {
-    if (!busy) void new ManualSuitesPage(root, render).open();
+    if (!busy) { startVisitorTracking(true, '/manuals'); void new ManualSuitesPage(root, render, user || undefined).open(); }
   });
   if (result) bindAuditQuestions(root, result);
   if (result) bindAiReviewEvents(root, result);
   root.querySelector('#templates-nav')?.addEventListener('click', () => {
-    if (!busy) void new AuthoringWorkspace(root, render, user?.role === 'admin').open();
-  });
-  root.querySelector('#llm-settings-nav')?.addEventListener('click', () => {
-    if (!busy && user?.role === 'admin') void new LlmSettingsPage(root, render).open();
+    if (!busy) { startVisitorTracking(true, '/authoring'); void new AuthoringWorkspace(root, render, user || undefined).open(); }
   });
   const input = root.querySelector<HTMLInputElement>('#file-input')!;
   root.querySelector('#browse')!.addEventListener('click', () => input.click());
@@ -157,10 +151,10 @@ function bindEvents(): void {
   }));
   root.querySelector<HTMLButtonElement>('#analyze')?.addEventListener('click', analyze);
   root.querySelector<HTMLButtonElement>('#logout')?.addEventListener('click', async () => {
-    await api.logout().catch(() => undefined); user = null; queue = []; result = null; documentReview = null; context = createPrescreenContext(asOfDate); renderLogin();
+    await api.logout().catch(() => undefined); stopVisitorTracking(); user = null; queue = []; result = null; documentReview = null; context = createPrescreenContext(asOfDate); renderLogin();
   });
   root.querySelectorAll<HTMLButtonElement>('#show-rules, #rules-nav').forEach((button) => button.addEventListener('click', () => {
-    if (!busy) void new RuleHandbookPage(root, render).open();
+    if (!busy) { startVisitorTracking(true, '/history'); void new RuleHandbookPage(root, render, user || undefined).open(); }
   }));
   root.querySelector('#notice-link')?.addEventListener('click', () => document.querySelector('#rule-note')?.scrollIntoView({ behavior: 'smooth' }));
   root.querySelector('#reset-result')?.addEventListener('click', () => { queue = []; result = null; documentReview = null; notice = ''; render(); });
@@ -257,7 +251,7 @@ async function confirmDecision(kind: 'version' | 'requirement', id: string, uid:
 async function loadWorkspace(): Promise<void> {
   try {
     const [loadedTypes, sets] = await Promise.all([api.documentTypes(), handbookApi.list()]);
-    types = loadedTypes; ruleSet = sets[0];
+    types = loadedTypes; ruleSet = sets[0]; startVisitorTracking(true, '/prescreen');
     render();
   } catch (error) {
     user = null;
@@ -266,6 +260,11 @@ async function loadWorkspace(): Promise<void> {
 }
 
 async function boot(): Promise<void> {
+  if (new URLSearchParams(location.search).get('password_changed') === '1') {
+    history.replaceState(null, '', location.pathname);
+    renderLogin('', '密码已修改，请重新登录');
+    return;
+  }
   try {
     user = await api.me();
     await loadWorkspace();
@@ -275,3 +274,12 @@ async function boot(): Promise<void> {
 }
 
 void boot();
+
+document.addEventListener('personal-files-selected', (event) => {
+  const uids = (event as CustomEvent<string[]>).detail;
+  void personalFilesApi.selection(uids.slice(0, Math.max(0, 20 - queue.length))).then(files => {
+    const seen = new Set(queue.map(item => item.uid).filter((uid): uid is string => Boolean(uid)));
+    files.forEach(file => { if (!seen.has(file.file_uid) && queue.length < 20) queue.push({ file: new File([], file.name), uid: file.file_uid, type: file.document_type, purpose: 'auto', metadata: file.control_metadata as ControlMetadata, detection: file.type_detection as TypeDetection }); });
+    notice = '已将所选历史文件加入预筛队列，原件未重新上传'; render();
+  }).catch(error => { notice = `错误：${error instanceof Error ? error.message : '载入文件失败'}`; render(); });
+});

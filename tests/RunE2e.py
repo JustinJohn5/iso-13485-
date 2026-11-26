@@ -26,7 +26,7 @@ def main() -> int:
         raise SystemExit('请先按 .env.test.example 创建项目根目录 .env.test')
     config = {key: value for key, value in dotenv_values(config_path).items() if value is not None}
     os.environ.update(config)
-    from sqlalchemy import delete, select, text
+    from sqlalchemy import delete, func, select, text
     from sqlalchemy.engine import make_url
     from App.Config.Settings import get_settings
     from App.Db.Session import get_engine, session_scope
@@ -43,6 +43,8 @@ def main() -> int:
     from App.Models.EmailVerificationCode import EmailVerificationCode
     from App.Models.EmailVerificationIpLimit import EmailVerificationIpLimit
     from App.Models.AiReview import AiReview, AiReviewDecision
+    from App.Models.FileGroup import FileGroup, FileGroupMember
+    from App.Models.Visitor import Visitor, VisitorDaily
     from App.Utils.Security import hash_password
 
     settings = get_settings()
@@ -69,6 +71,10 @@ def main() -> int:
     migrate_email()
     from MigrateAiReviews import migrate as migrate_ai_reviews
     migrate_ai_reviews()
+    from MigratePersonalFiles import migrate as migrate_personal_files
+    migrate_personal_files()
+    from MigrateAdmin import migrate as migrate_admin
+    migrate_admin()
 
     node = shutil.which('node')
     if not node:
@@ -94,6 +100,7 @@ def main() -> int:
                 'EMAIL_SMTP_SSL': 'false', 'EMAIL_SMTP_TIMEOUT_SECONDS': '5',
                 'SSL_CERT_FILE': str(mail_sink.cert_path), 'E2E_MAIL_DIR': str(mail_dir)}
     with session_scope() as db:
+        visitor_start_id = db.execute(select(func.coalesce(func.max(Visitor.id), 0))).scalar_one()
         db.execute(delete(EmailVerificationIpLimit))
         llm_row = db.execute(select(LlmConfig).where(LlmConfig.name == 'default')).scalar_one_or_none()
         llm_backup = {column.name: getattr(llm_row, column.name) for column in LlmConfig.__table__.columns} if llm_row else None
@@ -148,6 +155,9 @@ def main() -> int:
         with session_scope() as db:
             registered_ids = db.execute(select(User.id).where(User.email.like(registration_prefix + '-%@example.com'))).scalars().all()
             user_ids.extend(registered_ids)
+            db.execute(delete(VisitorDaily).where(VisitorDaily.visitor_id.in_(
+                select(Visitor.id).where(Visitor.id > visitor_start_id))))
+            db.execute(delete(Visitor).where(Visitor.id > visitor_start_id))
             llm_row = db.execute(select(LlmConfig).where(LlmConfig.name == 'default')).scalar_one_or_none()
             if llm_row and llm_row.updated_by in user_ids:
                 if llm_backup:
@@ -166,6 +176,9 @@ def main() -> int:
             db.execute(delete(DocumentDraft).where(DocumentDraft.created_by.in_(user_ids)))
             db.execute(delete(ManualSuite).where(ManualSuite.created_by.in_(user_ids)))
             db.execute(delete(AuditLog).where(AuditLog.user_id.in_(user_ids)))
+            group_ids = select(FileGroup.id).where(FileGroup.owner_id.in_(user_ids))
+            db.execute(delete(FileGroupMember).where(FileGroupMember.group_id.in_(group_ids)))
+            db.execute(delete(FileGroup).where(FileGroup.owner_id.in_(user_ids)))
             names = db.execute(select(UploadedFile.stored_name).where(UploadedFile.uploaded_by.in_(user_ids))).scalars().all()
             db.execute(delete(UploadedFile).where(UploadedFile.uploaded_by.in_(user_ids)))
             db.execute(delete(User).where(User.id.in_(user_ids)))

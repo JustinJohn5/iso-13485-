@@ -31,7 +31,8 @@ test('注册验证码输入框与发送按钮在桌面和窄屏均完整可用',
 test('修改密码验证码输入框与发送按钮在桌面和窄屏均完整可用', async ({ page }) => {
   const verify = watchPage(page);
   await login(page);
-  await page.getByTestId('change-password-nav').click();
+  await page.getByTestId('account-menu-button').click();
+  await page.getByTestId('account-password').click();
   await checkCodeLayout(page, 'password');
   await verify();
 });

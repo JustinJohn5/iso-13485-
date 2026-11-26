@@ -48,9 +48,8 @@ Windows 若出现 Playwright 转换缓存的 `EPERM`，可在专用测试终端�
 
 ## 目录及覆盖范围
 
-- 后台测试：后端目录运行 `python -m pytest ../tests/Services/test_AdminLogs.py ../tests/Services/test_VisitorTracking.py ../tests/Api/test_Admin.py ../tests/Api/test_AdminAudit.py ../tests/Api/test_AuthAuditing.py ../tests/Api/test_ProductRoutes.py -q`，覆盖访客聚合、日志受控读取与脱敏、管理员权限、认证审计及路由集成。数据库用例沿用 MySQL 8.4 `_codextest`，不使用 SQLite。
-
-- `tests/Services/test_PersonalFiles.py`：本人文件查询、所有权隔离、分组及批量成员管理。后端目录运行 `python -m pytest ../tests/Services/test_PersonalFiles.py -q`，沿用 MySQL 8.4 `_codextest` 测试副本。
+- 个人中心与后台：`tests/Services/test_PersonalFiles.py`、`test_AdminLogs.py`、`test_VisitorTracking.py` 覆盖文件所有权、分组事务、日志路径限制与脱敏、访客统计口径；`tests/Api/test_Admin.py`、`test_AdminAudit.py`、`test_AuthAuditing.py` 覆盖权限、审计详情过滤和认证审计。运行 `python -m pytest ../tests/Services/test_PersonalFiles.py ../tests/Services/test_AdminLogs.py ../tests/Services/test_VisitorTracking.py ../tests/Api/test_Admin.py ../tests/Api/test_AdminAudit.py ../tests/Api/test_AuthAuditing.py -q`。需要数据库的集成测试使用 `.env.test` 指向的 MySQL 8.4 `_codextest`，不得改用 SQLite。
+- `tests/e2e/PersonalFiles.spec.ts` 验证本人文件搜索、分组成员变更、删组保留原件及个人页面登出；`tests/e2e/AccountAdmin.spec.ts` 验证账户菜单、访客最近活跃时间、日志筛选和操作记录；`tests/e2e/VisitorTracking.spec.ts` 验证匿名首次页面浏览只计一次且路径正确。访客追踪由测试入口创建的管理员账号产生，并在用例后只清理本轮账号和访客行。根目录运行 `python tests/RunE2e.py tests/e2e/PersonalFiles.spec.ts tests/e2e/AccountAdmin.spec.ts tests/e2e/VisitorTracking.spec.ts`；入口会在测试副本执行幂等迁移。
 
 - `test_RequirementCatalog.py` 核对 72 项条款和 20 项生成映射。`test_GenerationRules.py` 核对条款依据、自检和修订。`test_Prescreen.py` 覆盖条件、受控引用、否定表述、部分抽取、证据保留和覆盖率。
 - `tests/e2e/IsoRules.spec.ts` 验证待补证据、体系范围、不适用说明、生成自检以及套册上下文持久化。单独运行时将该路径传给 `tests/RunE2e.py`。

@@ -45,7 +45,8 @@ test('验证码只出现在注册和改密，真实 SMTP 测试收件箱完成�
   try {
     const login = await otherContext.request.post(base + '/api/v1/auth/login', { data: { email, password } });
     expect(login.status()).toBe(200);
-    await page.getByTestId('change-password-nav').click();
+    await page.getByTestId('account-menu-button').click();
+    await page.getByTestId('account-password').click();
     await expect(page.getByTestId('password-email')).toHaveText(email);
     const passwordCodeResponse = page.waitForResponse(r => r.url().endsWith('/api/v1/auth/password-change-codes'));
     await page.getByTestId('password-send-code').click();

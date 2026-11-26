@@ -2,8 +2,7 @@
 
 ## 更新记录
 
-- 2026-11-26：新增访客跟踪及后台服务接口；MySQL 8.4 先在 `_codextest` 验证 `MigrateAdmin.py`，再迁移开发库。无新增环境变量。
-- 2026-11-26：新增本人文件与分组接口，MySQL 8.4 通过 `MigratePersonalFiles.py` 创建分组及成员表，先在 `_codextest` 验证；正式库须发布授权。无新增环境变量。
+- 2026-11-26：新增账户菜单、个人文件与分组，以及 `/admin/` 管理后台；新增 `file_groups`、`file_group_members`、`visitors`、`visitor_daily` 表。先在 MySQL 8.4 `_codextest` 验证两项迁移与 E2E，再迁移开发库；正式库须取得发布授权。无新增环境变量、端口或依赖。
 - 2026-11-26：新增预筛结果中的 AI 查找依据、逐项审阅及人工决定追加留痕；API Key 沿用网页加密配置。新增 `ai_reviews` 与 `ai_review_decisions` 表，先在 `_codextest` 验证 `MigrateAiReviews.py`，再按授权流程迁移目标数据库；无新增环境变量、端口或依赖。
 - 2026-11-24：验证码仅用于注册和修改密码，登录不变。新增 SMTP 配置、来源 IP 小时限流及可信代理设置，公开注册响应不暴露邮箱是否已注册。
 - 2026-11-24：注册验证码请求增加 MySQL 来源 IP 小时限流；统一邮箱是否已注册时的公开响应，并新增可信代理配置。迁移同时创建 `email_verification_ip_limits` 表。
@@ -206,9 +205,7 @@ ACCESS_TOKEN_COOKIE_NAME=iso_access_token
 初始化数据库：
 
 ```bash
-# 空库首次部署：一次性创建全部 10 张表（users、uploaded_files、validation_runs、
-# validation_documents、findings、audit_logs、llm_configs、document_drafts、
-# document_reviews、manual_suites）
+# 空库首次部署：InitDb.py 会依据当前模型创建全部业务表
 sudo -u isoapp -H /srv/iso/backend/.venv/bin/python /srv/iso/backend/InitDb.py
 
 # 创建首个管理员（交互输入邮箱、显示名、密码）
@@ -487,7 +484,9 @@ cd /srv/iso/backend
 - `document_reviews`（1.1.0）：`MigrateDocumentReviews.py`；MySQL DDL 不保证事务回滚，部分失败时保留备份、确认表/列状态后重试。
 - `manual_suites`（1.3.0）：`MigrateManualSuites.py`，只建表，不改既有业务表；回退应用时保留新表与上传原件。
 - `email_verification_codes`、`email_verification_ip_limits`（本次）：`MigrateEmailVerification.py`，只建验证码与限流状态表；回退应用时保留表和审计，不删除用户数据。
-- 跨域配置新增 `DELETE`（移出套册成员），反向代理需放行。
+- `file_groups`、`file_group_members`：`MigratePersonalFiles.py`，只建个人分组及文件引用表，不迁移或删除原件。
+- `visitors`、`visitor_daily`：`MigrateAdmin.py`，只建访客状态和每日访问聚合表；启用前没有历史访问统计数据。
+- 跨域配置允许 `DELETE`，用于移出套册或文件分组成员；反向代理需放行。
 
 ## 四、环境变量清单
 
@@ -651,10 +650,18 @@ AI 来源和模型标识保存在修订快照；不自动填写批准、生效�
 
 结果接口的 `documents` 对象新增 `file_uid`，用于让用户选择本次预筛中的文件；原文件名、文件类型和其他字段保持。AI 引用需要在指定抽取片段中逐字匹配，位置仅表示抽取文本行号。AI 结果不写回预筛快照、Finding、分数或覆盖率。AI 配置及数据保留策略按现有 MySQL 和安全配置备份制度维护。
 
-### 5.10 个人文件与分组迁移
+### 5.10 个人中心与管理后台
 
-既有 MySQL 8.4 数据库先在测试副本验证：在后端目录执行 `.venv/bin/python MigratePersonalFiles.py --env-file ../.env.test`。Windows 使用 `.venv/Scripts/python.exe`。测试通过后迁移开发库并重启后端；正式库仅在获得发布授权后使用正式配置并附加 `--allow-production`。迁移只建分组及成员引用表，删除分组不会删除原件。
+既有 MySQL 8.4 环境需先在独立 `_codextest` 副本依次运行两项迁移，再执行账户、分组和后台 E2E：
 
-### 5.11 访客与后台服务迁移
+```bash
+cd /srv/iso/backend
+.venv/bin/python MigratePersonalFiles.py --env-file ../.env.test
+.venv/bin/python MigrateAdmin.py --env-file ../.env.test
+cd /srv/iso
+./backend/.venv/bin/python tests/RunE2e.py tests/e2e/PersonalFiles.spec.ts tests/e2e/AccountAdmin.spec.ts
+```
 
-在后端目录执行 `.venv/bin/python MigrateAdmin.py --env-file ../.env.test`，Windows 使用 `.venv/Scripts/python.exe`。测试通过后迁移开发库并重启后端；正式库仅在获得发布授权后使用正式配置并附加 `--allow-production`。只新增访客与每日聚合表；在线窗口5分钟，统计从启用后开始，不保存原始 Cookie 或访客 IP。后台接口独立校验管理员角色，日志限制在配置目录内并脱敏返回。
+PowerShell 命令：先执行 Set-Location D:\iso\backend，再运行 .\.venv\Scripts\python.exe MigratePersonalFiles.py --env-file ..\.env.test 和 .\.venv\Scripts\python.exe MigrateAdmin.py --env-file ..\.env.test；然后执行 Set-Location D:\iso，再运行 .\backend\.venv\Scripts\python.exe tests/RunE2e.py tests/e2e/PersonalFiles.spec.ts tests/e2e/AccountAdmin.spec.ts。E2E 入口会自动执行幂等迁移；单独迁移命令用于验证升级流程。
+
+测试通过后再对开发库分别执行两项迁移并重启后端、重新构建前端。正式环境只能在获发布授权后，使用正式 `.env` 并分别附加 `--allow-production`。普通用户不能访问后台接口；大模型配置仍由原网页配置存储管理，密钥不回显。访客统计使用 HttpOnly 匿名 Cookie，不保存原始 Cookie 或访客 IP；在线口径为最近5分钟内活跃，登录前后的活动归并到同一访客，统计从功能发布后开始累计。

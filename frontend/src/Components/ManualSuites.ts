@@ -6,6 +6,8 @@ import { suiteInspection, suiteInspectionHistory, suiteMembers, suiteReader } fr
 import '../Suites.css';
 import { bindPrescreenContext, createPrescreenContext, renderPrescreenContext } from './PrescreenContext';
 import { editableContext, type DocumentPurpose, type PrescreenContext } from '../Types/Prescreen';
+import type { User } from '../Api';
+import { AccountMenu } from './AccountMenu';
 
 export class ManualSuitesPage {
   private catalog: CatalogEntry[] = [];
@@ -26,7 +28,7 @@ export class ManualSuitesPage {
   private failed = false;
   private pending: string[] = [];
 
-  constructor(private root: HTMLElement, private back: () => void) {}
+  constructor(private root: HTMLElement, private back: () => void, private user?: User) {}
 
   async open(): Promise<void> {
     window.scrollTo(0, 0);
@@ -55,7 +57,7 @@ export class ManualSuitesPage {
   private render(): void {
     const suite = this.suite;
     const present = new Set(suite?.items.map(item => item.catalog_key));
-    this.root.innerHTML = `<main class="suite-page"><header class="suite-header"><div><p class="eyebrow">QUALITY MANUAL LIBRARY</p><h1>整套手册</h1><p>按整套发布版本管理导入原件与生成草稿。</p></div><div class="suite-actions"><button class="button button-secondary" id="suite-back" data-testid="suite-back" ${this.busy ? 'disabled' : ''}>返回文件预筛</button></div></header>
+    this.root.innerHTML = `<main class="suite-page"><header class="suite-header"><div><p class="eyebrow">QUALITY MANUAL LIBRARY</p><h1>整套手册</h1><p>按整套发布版本管理导入原件与生成草稿。</p></div><div class="suite-actions"><div class="account-anchor" data-testid="account-anchor"></div><button class="button button-secondary" id="suite-back" data-testid="suite-back" ${this.busy ? 'disabled' : ''}>返回文件预筛</button></div></header>
       <p class="suite-note">生成件需要核对适用范围、填写事实并完成组织审批。目录齐全与文本命中不代表已经符合全部标准要求。</p>
       <div class="inline-notice ${this.failed ? 'is-error' : ''}" role="status" data-testid="suite-notice">${this.busy ? '正在处理，请稍候…' : escape(this.message)}</div>
       <fieldset class="suite-fieldset" ${this.busy ? 'disabled' : ''}><div class="suite-layout"><aside>
@@ -69,6 +71,8 @@ export class ManualSuitesPage {
   }
 
   private bind(): void {
+    const anchor = this.root.querySelector<HTMLElement>('[data-testid="account-anchor"]');
+    if (anchor && this.user) new AccountMenu(anchor, this.user, () => { location.href = '/admin/'; });
     bindPrescreenContext(this.root, this.context, (context, redraw) => {
       this.context = context;
       if (this.suite) this.suite.inspection = null;

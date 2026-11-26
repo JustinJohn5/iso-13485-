@@ -36,7 +36,7 @@ export class LlmSettingsPage {
         <div class="content-wrap authoring-wrap"><section class="page-heading"><div><p class="eyebrow">OPENAI COMPATIBLE API</p><h1>模型配置</h1><p>所有 AI 调用统一使用此处保存的服务地址、模型及参数。</p></div></section>
           <div class="notice-bar"><span class="notice-icon">i</span><p>API Key 保存后仅显示配置状态，留空保留已有密钥。更换服务地址时须重新提交密钥；正式部署使用 HTTPS。</p></div>
           ${this.message ? `<p class="inline-notice ${this.failed ? 'is-error' : ''}" role="status" data-testid="llm-notice">${escape(this.message)}</p>` : ''}
-          ${config ? `<section class="section-block authoring-editor"><form id="llm-settings-form" autocomplete="off"><fieldset class="authoring-fieldset" ${this.busy ? 'disabled' : ''}>
+          ${config ? `<section class="section-block authoring-editor"><form id="llm-settings-form" data-testid="llm-settings-form" autocomplete="off"><fieldset class="authoring-fieldset" ${this.busy ? 'disabled' : ''}>
             <label class="section-editor">启用 AI 编写与文件审阅<input type="checkbox" id="llm-enabled" data-testid="llm-enabled" ${config.enabled ? 'checked' : ''}></label>
             <div class="authoring-fields"><label>服务地址（包含服务商要求的 API 前缀）<input type="url" required maxlength="255" id="llm-url" data-testid="llm-url" value="${escape(config.base_url)}"></label>
               <label>模型标识<input required maxlength="128" id="llm-model" data-testid="llm-model" value="${escape(config.model)}"></label>

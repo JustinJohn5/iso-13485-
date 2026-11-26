@@ -49,7 +49,10 @@ test('管理员配置加密保存且不回显，AI 故障保留原草稿', async
   const base = process.env.E2E_API_BASE_URL!;
   // 使用隔离测试后端的不存在路径制造确定的模型服务错误，不发送真实资料或凭据。
   const key = 'synthetic-key-for-e2e-only';
-  await page.getByTestId('llm-settings-nav').click();
+  await page.getByTestId('account-menu-button').click();
+  await page.getByTestId('account-admin').click();
+  await expect(page.getByTestId('admin-workspace')).toBeVisible();
+  await page.getByTestId('admin-nav-models').click();
   await page.getByTestId('llm-enabled').check();
   await page.getByTestId('llm-url').fill(`${base}/intentionally-missing-llm/v1`);
   await page.getByTestId('llm-model').fill('synthetic-test-model');
@@ -76,6 +79,8 @@ test('管理员配置加密保存且不回显，AI 故障保留原草稿', async
   const draft = (await created.json()).data;
   const assertClean = watchPage(page, [{ path: `/api/v1/document-drafts/${draft.draft_uid}/ai-draft`, status: 502, code: 1402 }]);
   await page.getByTestId('settings-back').click();
+  await page.goto(process.env.E2E_BASE_URL!);
+  await expect(page.getByTestId('upload-dropzone')).toBeVisible();
   await page.getByTestId('templates-nav').click();
   await page.getByTestId(`open-draft-${draft.draft_uid}`).click();
   await expect(page.getByTestId('ai-draft')).toBeEnabled();

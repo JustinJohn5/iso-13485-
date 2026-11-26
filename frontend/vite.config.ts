@@ -1,4 +1,5 @@
 import { defineConfig, loadEnv } from 'vite';
+import { resolve } from 'node:path';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
@@ -11,5 +12,6 @@ export default defineConfig(({ mode }) => {
   return {
     server: { port, strictPort: true },
     preview: { port, strictPort: true },
+    build: { rollupOptions: { input: { main: resolve(__dirname, 'index.html'), admin: resolve(__dirname, 'admin/index.html') } } },
   };
 });

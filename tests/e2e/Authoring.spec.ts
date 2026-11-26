@@ -76,10 +76,15 @@ test('移动端可切换编写、返回预筛、打开配置并退出登录', as
   await expect(page.getByTestId('template-market-research')).toBeVisible();
   await page.getByTestId('precheck-nav').click();
   await expect(page.getByTestId('upload-dropzone')).toBeVisible();
-  await page.getByTestId('llm-settings-nav').click();
+  await expect(page.getByTestId('llm-settings-nav')).toHaveCount(0);
+  await page.getByTestId('account-menu-button').click();
+  await page.getByTestId('account-admin').click();
+  await page.getByTestId('admin-nav-models').click();
   await expect(page.getByTestId('llm-key-status')).toBeVisible();
   await expect(page.getByTestId('settings-back')).toBeVisible();
   await page.getByTestId('settings-back').click();
+  await page.goto(process.env.E2E_BASE_URL!);
+  await expect(page.getByTestId('upload-dropzone')).toBeVisible();
   await page.getByTestId('logout').click();
   await expect(page.getByTestId('login-form')).toBeVisible();
   await assertClean();

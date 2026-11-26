@@ -3,6 +3,8 @@ import type { HandbookRule, RuleHandbook, RuleSetSummary } from '../Types/RuleHa
 import { escape } from '../Utils/Html';
 import '../Suites.css';
 import { factLabels } from '../Types/Prescreen';
+import type { User } from '../Api';
+import { AccountMenu } from './AccountMenu';
 
 export class RuleHandbookPage {
   private sets: RuleSetSummary[] = [];
@@ -13,7 +15,7 @@ export class RuleHandbookPage {
   private error = '';
   private busy = false;
 
-  constructor(private root: HTMLElement, private back: () => void) {}
+  constructor(private root: HTMLElement, private back: () => void, private user?: User) {}
 
   async open(): Promise<void> {
     window.scrollTo(0, 0);
@@ -28,13 +30,15 @@ export class RuleHandbookPage {
   private render(): void {
     const book = this.handbook;
     const clauses = [...new Set(book?.rules.map(row => row.clause) || [])];
-    this.root.innerHTML = `<main class="suite-page" data-testid="rule-handbook"><header class="suite-header"><div><p class="eyebrow">RULE HANDBOOK</p><h1>规则手册</h1><p>${escape(book?.standard || '')} · 规则版本 ${escape(book?.version || '')}</p></div><button class="button button-secondary" id="rules-back" data-testid="rules-back">返回文件预筛</button></header>
+    this.root.innerHTML = `<main class="suite-page" data-testid="rule-handbook"><header class="suite-header"><div><p class="eyebrow">RULE HANDBOOK</p><h1>规则手册</h1><p>${escape(book?.standard || '')} · 规则版本 ${escape(book?.version || '')}</p></div><div class="account-anchor" data-testid="account-anchor"></div><button class="button button-secondary" id="rules-back" data-testid="rules-back">返回文件预筛</button></header>
       <p class="suite-note">这里展示系统实际执行的文本检查规则，包括适用类型、检查条件、依据和建议。${escape(book?.description || '')}</p>
       <p role="status">${this.busy ? '正在读取规则…' : escape(this.error)}</p>
       <section class="suite-card"><label>规则包与版本<select id="rule-set" data-testid="rule-set" ${this.busy ? 'disabled' : ''}>${this.sets.map(row => `<option value="${escape(row.rule_set_id)}" ${row.rule_set_id === book?.rule_set_id ? 'selected' : ''}>${escape(row.title)} · v${escape(row.version)}</option>`).join('')}</select></label>
       <div class="rule-filters suite-form"><label>检索编号、标题或内容<input id="rule-search" data-testid="rule-search" value="${escape(this.query)}" placeholder="例如 DOC-001 或文件控制"></label><label>条款<select id="rule-clause" data-testid="rule-clause"><option value="">全部条款</option>${clauses.map(value => `<option value="${escape(value)}" ${value === this.clause ? 'selected' : ''}>${escape(value)}</option>`).join('')}</select></label><label>适用文件类型<select id="rule-type" data-testid="rule-type"><option value="">全部类型</option>${book?.document_types.map(row => `<option value="${escape(row.type)}" ${row.type === this.type ? 'selected' : ''}>${escape(row.label)}</option>`).join('') || ''}</select></label></div>
       <div id="rule-list" data-testid="rule-list"></div></section></main>`;
     this.root.querySelector('#rules-back')?.addEventListener('click', this.back);
+    const anchor = this.root.querySelector<HTMLElement>('[data-testid="account-anchor"]');
+    if (anchor && this.user) new AccountMenu(anchor, this.user, () => { location.href = '/admin/'; });
     this.root.querySelector<HTMLInputElement>('#rule-search')?.addEventListener('input', event => { this.query = (event.target as HTMLInputElement).value; this.renderRules(); });
     this.root.querySelector<HTMLSelectElement>('#rule-clause')?.addEventListener('change', event => { this.clause = (event.target as HTMLSelectElement).value; this.renderRules(); });
     this.root.querySelector<HTMLSelectElement>('#rule-type')?.addEventListener('change', event => { this.type = (event.target as HTMLSelectElement).value; this.renderRules(); });
