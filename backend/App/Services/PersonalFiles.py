@@ -20,9 +20,10 @@ from App.Services.DocumentClassifier import detect_document_type
 from App.Services.DocumentControl.Metadata import extract_metadata
 from App.Utils.Errors import ApiError
 from App.Utils.TimeUtils import to_iso
+from App.Utils.StoredFiles import stored_file_path
 
 
-def _group(db: Session, user: User, uid: str, *, lock: bool = False) -> FileGroup:
+def owned_group(db: Session, user: User, uid: str, *, lock: bool = False) -> FileGroup:
     query = select(FileGroup).where(FileGroup.group_uid == uid, FileGroup.owner_id == user.id)
     if lock:
         query = query.with_for_update()
@@ -107,19 +108,25 @@ def download_file(db: Session, user: User, uid: str, upload_dir: Path) -> tuple[
                                                UploadedFile.uploaded_by == user.id)).scalar_one_or_none()
     if row is None:
         raise ApiError(1203)
-    base = upload_dir.resolve()
-    # 存储名只允许直接子文件，不允许目录、符号链接或越界解析；外部只收到统一404。
-    if not row.stored_name or '/' in row.stored_name or '\\' in row.stored_name:
-        raise ApiError(1203)
-    candidate = base / row.stored_name
-    try:
-        path = candidate.resolve(strict=True)
-        valid = not candidate.is_symlink() and path.parent == base and path.is_file()
-    except (OSError, RuntimeError):
-        valid = False
-    if not valid:
-        raise ApiError(1203, '文件原件不存在或不可下载')
-    return row, path
+    return row, stored_file_path(row.stored_name, upload_dir)
+
+
+def group_files(db: Session, user: User, uid: str, *, limit: int) -> tuple[FileGroup, list[UploadedFile]]:
+    group = owned_group(db, user, uid)
+    # 一次关联查询，额外读取一份用于判断超量，绝不把截断结果当成整组。
+    rows = list(db.execute(select(UploadedFile).join(FileGroupMember, FileGroupMember.file_id == UploadedFile.id)
+                           .where(FileGroupMember.group_id == group.id, UploadedFile.uploaded_by == user.id)
+                           .order_by(UploadedFile.id).limit(limit + 1)).scalars())
+    if not rows:
+        raise ApiError(1001, '分组为空，请先上传文件或添加成员')
+    if len(rows) > limit:
+        raise ApiError(1001, f'本次操作最多支持{limit}份文件，请拆分分组后重试')
+    return group, rows
+
+
+def group_selection(db: Session, user: User, uid: str) -> list[dict]:
+    _, rows = group_files(db, user, uid, limit=20)
+    return _file_summaries(db, user, rows)
 
 
 def list_groups(db: Session, user: User, *, page: int, page_size: int) -> dict:
@@ -162,7 +169,7 @@ def create_group(db: Session, user: User, name: str) -> dict:
 
 def rename_group(db: Session, user: User, uid: str, name: str) -> dict:
     name, identity = _name(name)
-    row = _group(db, user, uid, lock=True)
+    row = owned_group(db, user, uid, lock=True)
     row.name, row.name_identity = name, identity
     AuditLogDao.add(db, user_id=user.id, action='file_group_rename', target_type='file_group', target_id=uid)
     _commit(db)
@@ -170,7 +177,7 @@ def rename_group(db: Session, user: User, uid: str, name: str) -> dict:
 
 
 def delete_group(db: Session, user: User, uid: str) -> None:
-    row = _group(db, user, uid, lock=True)
+    row = owned_group(db, user, uid, lock=True)
     db.execute(delete(FileGroupMember).where(FileGroupMember.group_id == row.id))
     db.delete(row)
     AuditLogDao.add(db, user_id=user.id, action='file_group_delete', target_type='file_group', target_id=uid)
@@ -181,7 +188,7 @@ def change_members(db: Session, user: User, uid: str, file_uids: list[str], *, a
     file_uids = _validated_uids(file_uids)
     try:
         # 分组行锁串行化同组变更；所有权批量校验先于任何成员写入。
-        group = _group(db, user, uid, lock=True)
+        group = owned_group(db, user, uid, lock=True)
         file_ids = list(db.execute(select(UploadedFile.id).where(UploadedFile.uploaded_by == user.id,
                                                                 UploadedFile.file_uid.in_(file_uids))
                                    .order_by(UploadedFile.id).with_for_update()).scalars())

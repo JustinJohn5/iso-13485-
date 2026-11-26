@@ -167,3 +167,132 @@ def test_download_only_accepts_owned_existing_regular_file(database, tmp_path):
     with pytest.raises(ApiError) as caught:
         download_file(db, users[0], files[0].file_uid, tmp_path)
     assert caught.value.http_status == 404
+
+
+def test_group_selection_is_complete_owned_and_has_bounded_queries(database):
+    from App.Services.PersonalFiles import create_group, change_members, group_selection
+    from App.Utils.Errors import ApiError
+    db, engine, users, files = database
+    group = create_group(db, users[0], '整组预筛')
+    change_members(db, users[0], group['group_uid'], [files[1].file_uid, files[0].file_uid], add=True)
+    statements = []
+    def record(*args):
+        statements.append(args[2])
+    event.listen(engine, 'before_cursor_execute', record)
+    try:
+        selected = group_selection(db, users[0], group['group_uid'])
+    finally:
+        event.remove(engine, 'before_cursor_execute', record)
+    assert [row['file_uid'] for row in selected] == [files[0].file_uid, files[1].file_uid]
+    assert len(statements) <= 3
+    with pytest.raises(ApiError) as caught:
+        group_selection(db, users[1], group['group_uid'])
+    assert caught.value.http_status == 404
+
+
+def test_group_selection_rejects_empty_and_more_than_twenty_without_truncation(database):
+    from App.Models.UploadedFile import UploadedFile
+    from App.Services.PersonalFiles import create_group, change_members, group_selection
+    from App.Utils.Errors import ApiError
+    db, _, users, files = database
+    group = create_group(db, users[0], '容量边界')
+    with pytest.raises(ApiError) as caught:
+        group_selection(db, users[0], group['group_uid'])
+    assert caught.value.http_status == 400
+    extra = [UploadedFile(file_uid=str(uuid4()), original_name=f'文件{i}.txt', stored_name=f'{uuid4().hex}.txt',
+                          extension='.txt', document_type='procedure', mime_type='text/plain', size_bytes=1,
+                          sha256='b' * 64, extracted_text='测试', uploaded_by=users[0].id) for i in range(19)]
+    db.add_all(extra)
+    db.commit()
+    change_members(db, users[0], group['group_uid'], [row.file_uid for row in [*files[:2], *extra]], add=True)
+    with pytest.raises(ApiError) as caught:
+        group_selection(db, users[0], group['group_uid'])
+    assert caught.value.http_status == 400 and '20' in caught.value.message
+
+
+def test_group_archive_contains_all_originals_with_safe_unique_names_and_bounded_queries(database, tmp_path):
+    from zipfile import ZipFile
+    from App.Services.PersonalFiles import create_group, change_members
+    from App.Services.FileGroupOperations import build_group_archive
+    db, engine, users, files = database
+    group = create_group(db, users[0], '归档')
+    for row, content in zip(files[:2], ['原件甲', '原件乙']):
+        row.original_name = '../CON:采购.txt'
+        (tmp_path / row.stored_name).write_text(content, encoding='utf-8')
+    db.commit()
+    change_members(db, users[0], group['group_uid'], [row.file_uid for row in files[:2]], add=True)
+    statements = []
+    def record(*args):
+        statements.append(args[2])
+    event.listen(engine, 'before_cursor_execute', record)
+    try:
+        name, output = build_group_archive(db, users[0], group['group_uid'], tmp_path)
+    finally:
+        event.remove(engine, 'before_cursor_execute', record)
+    with output, ZipFile(output) as archive:
+        assert name == '归档.zip'
+        assert len(archive.namelist()) == len(set(archive.namelist())) == 2
+        assert all(not any(char in name for char in '/\\:') for name in archive.namelist())
+        assert [archive.read(name).decode('utf-8') for name in archive.namelist()] == ['原件甲', '原件乙']
+    assert len(statements) <= 2
+
+
+@pytest.mark.parametrize('failure', ['other-owner', 'empty', 'missing', 'escape', 'too-large', 'too-many'])
+def test_group_archive_refuses_incomplete_or_unauthorized_download(database, tmp_path, monkeypatch, failure):
+    from App.Services import FileGroupOperations as archive_service
+    from App.Services.PersonalFiles import create_group, change_members
+    from App.Utils.Errors import ApiError
+    db, _, users, files = database
+    group = create_group(db, users[0], '拒绝残缺包')
+    if failure != 'empty':
+        change_members(db, users[0], group['group_uid'], [row.file_uid for row in files[:2]], add=True)
+    for row in files[:2]:
+        (tmp_path / row.stored_name).write_bytes(b'12345')
+    if failure == 'missing':
+        (tmp_path / files[1].stored_name).unlink()
+    if failure == 'escape':
+        files[1].stored_name = '../outside.txt'
+        db.commit()
+    if failure == 'too-large':
+        # 实际文件大小超过限制，即使数据库体积为零也不能绕过。
+        files[0].size_bytes = files[1].size_bytes = 0
+        db.commit()
+        monkeypatch.setattr(archive_service, 'MAX_ARCHIVE_BYTES', 9)
+    if failure == 'too-many':
+        monkeypatch.setattr(archive_service, 'MAX_ARCHIVE_FILES', 1)
+    with pytest.raises(ApiError) as caught:
+        archive_service.build_group_archive(db, users[1] if failure == 'other-owner' else users[0], group['group_uid'], tmp_path)
+    assert caught.value.http_status == (404 if failure in {'other-owner', 'missing', 'escape'} else 400)
+
+
+@pytest.mark.parametrize('failure', ['', 'other-owner', 'commit'])
+def test_group_upload_keeps_file_and_membership_in_one_transaction(database, tmp_path, monkeypatch, failure):
+    import asyncio
+    from io import BytesIO
+    from starlette.datastructures import UploadFile
+    from App.Api import Documents
+    from App.Models.FileGroup import FileGroupMember
+    from App.Models.UploadedFile import UploadedFile
+    from App.Services.PersonalFiles import create_group
+    from App.Utils.Errors import ApiError
+    db, _, users, _ = database
+    group = create_group(db, users[1] if failure == 'other-owner' else users[0], '上传事务')
+    monkeypatch.setattr(Documents, 'get_settings', lambda: SimpleNamespace(upload_dir=tmp_path, max_upload_size_bytes=1024))
+    if failure == 'commit':
+        def fail_commit():
+            raise RuntimeError('模拟事务提交失败')
+        monkeypatch.setattr(db, 'commit', fail_commit)
+    uploaded = UploadFile(filename='新上传.txt', file=BytesIO('文件编号：QP-NEW'.encode('utf-8')))
+    def upload():
+        return asyncio.run(Documents.upload_document(file=uploaded, document_type='auto', group_uid=group['group_uid'], db=db, user=users[0]))
+    if failure:
+        with pytest.raises(ApiError if failure == 'other-owner' else RuntimeError):
+            upload()
+        assert list(tmp_path.iterdir()) == []
+        assert db.execute(select(func.count()).select_from(UploadedFile).where(UploadedFile.original_name == '新上传.txt')).scalar_one() == 0
+    else:
+        response = upload()
+        row = db.execute(select(UploadedFile).where(UploadedFile.file_uid == response['data']['file_uid'])).scalar_one()
+        assert db.execute(select(func.count()).select_from(FileGroupMember).where(FileGroupMember.file_id == row.id)).scalar_one() == 1
+        assert (tmp_path / row.stored_name).read_text(encoding='utf-8') == '文件编号：QP-NEW'
+    assert uploaded.file.closed

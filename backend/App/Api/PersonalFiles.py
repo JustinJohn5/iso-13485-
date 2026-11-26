@@ -1,6 +1,8 @@
 """个人上传文件库、分组及原件下载接口。"""
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
+from starlette.background import BackgroundTask
+from urllib.parse import quote
 from sqlalchemy.orm import Session
 
 from App.Api.Dependencies import current_user
@@ -10,6 +12,7 @@ from App.Db.Session import get_db
 from App.Models.User import User
 from App.Schemas.PersonalFiles import GroupMembers, GroupName
 from App.Services import PersonalFiles as service
+from App.Services.FileGroupOperations import archive_chunks, build_group_archive
 from App.Utils.FileGuard import sanitize_filename
 from App.Utils.Response import success
 
@@ -49,6 +52,26 @@ def groups(page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100),
 @router.post('/file-groups')
 def create(payload: GroupName, db: Session = Depends(get_db), user: User = Depends(current_user)):
     return success(service.create_group(db, user, payload.name), '文件分组已创建')
+
+
+@router.get('/file-groups/{uid}/selection')
+def group_selection(uid: str, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    return success(service.group_selection(db, user, uid))
+
+
+@router.get('/file-groups/{uid}/download')
+def group_download(uid: str, db: Session = Depends(get_db), user: User = Depends(current_user)):
+    name, output = build_group_archive(db, user, uid, get_settings().upload_dir)
+    try:
+        AuditLogDao.add(db, user_id=user.id, action='file_group_download', target_type='file_group', target_id=uid)
+        db.commit()
+    except Exception:
+        output.close()
+        raise
+    return StreamingResponse(archive_chunks(output), media_type='application/zip',
+                             headers={'Content-Disposition': f"attachment; filename*=UTF-8''{quote(name)}",
+                                      'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff'},
+                             background=BackgroundTask(output.close))
 
 
 @router.patch('/file-groups/{uid}')

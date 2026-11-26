@@ -14,10 +14,12 @@ from App.Api.Dependencies import current_user, require_writer
 from App.Api.System import rule_loader
 from App.Config.Settings import get_settings
 from App.Dao.FileDao import FileDao
+from App.Dao.AuditLogDao import AuditLogDao
 from App.Dao.ValidationDao import ValidationDao
 from App.Db.Session import get_db
 from App.Models.Finding import Finding, SOURCE_RULE, STATUS_PASS
 from App.Models.UploadedFile import UploadedFile
+from App.Models.FileGroup import FileGroupMember
 from App.Models.User import User
 from App.Models.ValidationDocument import ValidationDocument
 from App.Models.ValidationRun import STATUS_SUCCEEDED, ValidationRun
@@ -29,6 +31,7 @@ from App.Services.DocumentControl.ReviewStore import validation_scope
 from App.Services.Rules.RuleEngine import DocumentInput, RuleEngine
 from App.Services.Rules.PrescreenReport import build_prescreen_report, evaluation_dict
 from App.Services.ScoringService import build_score
+from App.Services.PersonalFiles import owned_group
 from App.Utils.Errors import ApiError
 from App.Utils.FileGuard import (
     build_storage_path,
@@ -76,6 +79,7 @@ def update_document_type(
 async def upload_document(
     file: UploadFile = File(...),
     document_type: str = Form("auto"),
+    group_uid: str = Form("", max_length=36),
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
@@ -94,6 +98,7 @@ async def upload_document(
     size = 0
     head = bytearray()
     try:
+        group = owned_group(db, user, group_uid, lock=True) if group_uid else None
         with path.open("xb") as stream:
             while chunk := await file.read(_CHUNK_SIZE):
                 size += len(chunk)
@@ -124,6 +129,10 @@ async def upload_document(
             uploaded_by=user.id,
         )
         FileDao.create(db, row)
+        if group is not None:
+            db.add(FileGroupMember(group_id=group.id, file_id=row.id))
+            AuditLogDao.add(db, user_id=user.id, action='file_group_upload', target_type='file_group',
+                            target_id=group_uid, detail='文件数量=1')
         db.commit()
         return success({
             "file_uid": row.file_uid,
