@@ -2,6 +2,7 @@ import type { Finding, ValidationResult } from '../Api';
 import { escape } from '../Utils/Html';
 import { findingDetails, findingLabel, renderPrescreenSummary } from './PrescreenReport';
 import { purposeLabels, type DocumentPurpose } from '../Types/Prescreen';
+import { renderAiReviewPanel } from './AiReview';
 
 function findingRows(items: Finding[]): string {
   return items.map((item, index) => {
@@ -38,6 +39,7 @@ export function renderResult(data: ValidationResult): string {
     ${data.excluded_versions?.length ? `<p class="duplicate-note" data-testid="excluded-versions">根据本次正式版确认，以下候选未参与计分（原件保留）：${data.excluded_versions.map(escape).join('；')}</p>` : ''}
     ${data.document_review ? `<p class="duplicate-note" data-testid="review-snapshot">已保存本次正式依据快照 · ${escape(data.document_review.review_uid)} / 修订 ${data.document_review.revision}${data.document_review.requirement_conflicts.length ? '；跨文件要求冲突仍需按确认依据修订源文件' : ''}</p>` : ''}
     ${data.prescreen ? renderPrescreenSummary(data.prescreen, data.score.verdict) : `<div class="result-overview"><div class="score-block"><span>规则线索得分</span><strong>${data.score.score}<small>/100</small></strong><em data-testid="result-verdict">${escape(data.score.verdict)}</em></div><div class="result-stat"><strong data-testid="active-count">${data.score.total_count}</strong><span>参与检查项</span></div><div class="result-stat success-stat"><strong>${data.score.passed_count}</strong><span>通过</span></div><div class="result-stat warning-stat"><strong>${data.score.failed_count}</strong><span>待核实</span></div><div class="result-stat muted-stat"><strong>${data.score.skipped_count}</strong><span>未适用</span></div></div>`}
+    ${renderAiReviewPanel(data)}
     ${findingTable(active)}
     ${skipped.length ? `<details class="skipped-findings" data-testid="skipped-findings"><summary data-testid="toggle-skipped">未参与判定的规则（${skipped.length} 项）</summary>${findingTable(skipped)}</details>` : ''}
     <div class="result-disclaimer">${escape(data.disclaimer)}</div></section>`;

@@ -10,7 +10,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from App.Api import AuditReports, Auth, Authoring, DocumentReviews, Documents, DraftBatches, LlmSettings, ManualSuites, System
+from App.Api import AiReviews, AuditReports, Auth, Authoring, DocumentReviews, Documents, DraftBatches, LlmSettings, ManualSuites, System
 from App.Config.Settings import SettingsError, get_settings
 from App.Services.Rules.RuleSetLoader import RuleSetLoader
 from App.Utils.Errors import ApiError
@@ -86,4 +86,5 @@ app.include_router(LlmSettings.router)
 app.include_router(AuditReports.router)
 app.include_router(DraftBatches.router)
 app.include_router(ManualSuites.router)
+app.include_router(AiReviews.router)
 

@@ -2,6 +2,7 @@ import './style.css';
 import './document-control.css';
 import { api, type DocumentType, type TypeDetection, type User, type ValidationResult } from './Api';
 import { renderResult } from './Components/Results';
+import { bindAiReviewEvents } from './Components/AiReview';
 import { AuthenticationPage } from './Components/Authentication';
 import { PasswordChangePage } from './Components/PasswordChange';
 import { escape } from './Utils/Html';
@@ -119,6 +120,7 @@ function bindEvents(): void {
     if (!busy) void new ManualSuitesPage(root, render).open();
   });
   if (result) bindAuditQuestions(root, result);
+  if (result) bindAiReviewEvents(root, result);
   root.querySelector('#templates-nav')?.addEventListener('click', () => {
     if (!busy) void new AuthoringWorkspace(root, render, user?.role === 'admin').open();
   });

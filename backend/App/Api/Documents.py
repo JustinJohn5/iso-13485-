@@ -243,7 +243,7 @@ def validate_documents(
         "excluded_versions": excluded_versions,
         "document_review": review_snapshot if review_uid else None,
         "prescreen": prescreen,
-        "documents": [{"name": item.name, "document_type": item.document_type,
+        "documents": [{"file_uid": item.file_uid, "name": item.name, "document_type": item.document_type,
                        "type_label": rule_set.document_type_label(item.document_type)} for item in inputs],
         "findings": [evaluation_dict(item) for item in evaluations],
         "disclaimer": "本结果仅为基于文本规则的预筛查，不构成 ISO 13485 认证、审核结论或法规符合性声明。",

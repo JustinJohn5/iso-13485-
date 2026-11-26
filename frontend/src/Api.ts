@@ -76,7 +76,7 @@ export interface ValidationResult {
     clause_matrix: Array<{ clause: string; clause_title: string; rate: number }>;
   };
   findings: Finding[];
-  documents: Array<{ name: string; document_type: string; type_label: string }>;
+  documents: Array<{ file_uid: string; name: string; document_type: string; type_label: string }>;
   duplicate_files: Array<{ name: string; kept_name: string }>;
   excluded_versions: string[];
   document_review: DocumentReview | null;

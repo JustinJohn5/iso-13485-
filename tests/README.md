@@ -6,6 +6,7 @@
 - 前端与根目录分别执行 `npm ci`，沿用 Node.js 26.13.1。根目录执行 `npx playwright install chromium`；已安装 Edge 时也可配置 `E2E_BROWSER_CHANNEL=msedge`。
 - E2E 使用 MySQL 8.4 的独立库（如 `iso13485_codextest`），先用当前发布版本初始化表。严禁使用开发或正式业务库。无需每次重建测试库。
 - `.env.test` 须配置 `E2E_SMTP_PORT=5425`（选择空闲端口）。测试入口临时启动仅监听本机的 STARTTLS SMTP 收件箱，动态生成授权值与证书，用真实发信模块收件；不会向真实邮箱投递。`tests/Helpers/MailSink.py` 依赖既有 `cryptography`，无需新增依赖。端口与开发、正式服务错开。
+- AI 审阅 E2E 由 `tests/Helpers/MockLlmServer.py` 临时启动仅绑定 `127.0.0.1` 的 OpenAI 兼容模拟服务，使用随机空闲端口，不访问外部模型服务；测试通过管理员 API 临时配置，结束时恢复测试库原配置。
 - 复制根目录 `.env.test.example` 为 `.env.test`，填写测试连接串、随机密钥、前后端地址及端口。上传目录须在项目 `.local` 内；相对路径按后端目录解析。真实 `.env.test` 被 Git 忽略。
 
 ## 单元测试和构建
@@ -39,7 +40,7 @@ macOS / Ubuntu：
 ./backend/.venv/bin/python tests/RunE2e.py --headed
 ```
 
-默认无头运行。入口读取 `.env.test`，校验环境、库名、MySQL 版本、上传目录和端口，应用本次文件集审查迁移，创建随机专用管理员和隔离审核员，独立启动测试前后端，等待就绪后运行 Playwright。不需要人工启动测试服务，也不使用现有管理员密码。用例在一个 worker 中顺序执行，避免共享本次临时账号的计数断言互相干扰，单个用例可独立运行。
+默认无头运行。入口读取 `.env.test`，校验环境、库名、MySQL 版本、上传目录和端口，应用所需迁移（含 AI 审阅表），创建随机专用管理员和隔离审核员，独立启动测试前后端及回环模拟服务，等待就绪后运行 Playwright。不需要人工启动测试服务，也不使用现有管理员密码。用例在一个 worker 中顺序执行，避免共享本次临时账号的计数断言互相干扰，单个用例可独立运行。
 
 测试端口默认前端 5400、后端 8400，与本地 5300/8320、正式 5500/8500 分离；数据库按连接串实际端口访问独立测试库。测试结束（包括用例失败）会停止本次启动的服务，并批量清理本次账号、上传原件与预筛记录。强制杀死测试入口可能跳过清理，需检查 `.local/E2eLogs` 和测试进程归属再处理，不得盲目结束端口进程或清空测试库。
 
@@ -69,6 +70,7 @@ Windows 若出现 Playwright 转换缓存的 `EPERM`，可在专用测试终端�
 - `tests/e2e/AuditQuestions.spec.ts`：预筛至内审问题清单的完整交互、引用缺项、下载及其他用户权限。
 
 - `tests/Services/test_AiDraft.py`：SDK 超时/重试配置、脱敏日志、未配置拒绝、异常 JSON 和章节合同；使用合成数据与模拟客户端，不调用真实模型。
+- `tests/Services/test_AiReview.py`：候选片段行号、原文引用精确匹配、逐项完整覆盖和未检出范围约束。`tests/e2e/AiReview.spec.ts` 验证两种模式、人工修改采纳历史、其他用户越权拒绝及预筛分数不变；只调用本地合成 OpenAI 兼容服务。
 - `tests/e2e/LlmSettings.spec.ts`：管理员配置、API Key 密文入库且不回显、审核员越权拒绝、实际模型调用失败后保留草稿。测试结束仅在配置仍由本次账号修改时恢复原测试库配置，不触碰开发/正式配置。
 
 - `tests/Services/test_TemplateLibrary.py`：模板检索、输入边界、参数联动、历史隔离及真实 Word 内容。

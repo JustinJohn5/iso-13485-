@@ -42,6 +42,7 @@ def main() -> int:
     from App.Models.LlmConfig import LlmConfig
     from App.Models.EmailVerificationCode import EmailVerificationCode
     from App.Models.EmailVerificationIpLimit import EmailVerificationIpLimit
+    from App.Models.AiReview import AiReview, AiReviewDecision
     from App.Utils.Security import hash_password
 
     settings = get_settings()
@@ -66,6 +67,8 @@ def main() -> int:
     migrate_suites()
     from MigrateEmailVerification import migrate as migrate_email
     migrate_email()
+    from MigrateAiReviews import migrate as migrate_ai_reviews
+    migrate_ai_reviews()
 
     node = shutil.which('node')
     if not node:
@@ -78,10 +81,13 @@ def main() -> int:
     if not config.get('E2E_SMTP_PORT'):
         raise SystemExit('请在 .env.test 设置 E2E_SMTP_PORT（隔离 SMTP 测试收件箱端口）')
     from Helpers.MailSink import MailSink
+    from Helpers.MockLlmServer import MockLlmServer
     mail_dir = ROOT / '.local' / 'E2eMail' / registration_prefix
     smtp_user, smtp_password = secrets.token_hex(8), secrets.token_urlsafe(24)
     mail_sink = MailSink('127.0.0.1', int(config['E2E_SMTP_PORT']), mail_dir,
                          smtp_user, smtp_password, registration_prefix)
+    mock_llm = MockLlmServer()
+    mock_llm.start()
     mail_env = {'EMAIL_SMTP_HOST': '127.0.0.1', 'EMAIL_SMTP_PORT': config['E2E_SMTP_PORT'],
                 'EMAIL_SMTP_USERNAME': smtp_user, 'EMAIL_SMTP_PASSWORD': smtp_password,
                 'EMAIL_FROM_ADDRESS': 'no-reply@example.com', 'EMAIL_SMTP_STARTTLS': 'true',
@@ -100,7 +106,7 @@ def main() -> int:
         user_ids = [user.id, other.id]
     env = {**os.environ, **mail_env, 'E2E_EMAIL': email, 'E2E_PASSWORD': password, 'E2E_OTHER_EMAIL': other_email,
            'E2E_OTHER_PASSWORD': other_password, 'E2E_PYTHON': sys.executable,
-           'E2E_REGISTRATION_PREFIX': registration_prefix}
+           'E2E_REGISTRATION_PREFIX': registration_prefix, 'E2E_LLM_BASE_URL': mock_llm.base_url}
     processes: list[subprocess.Popen] = []
     log_dir = ROOT / '.local' / 'E2eLogs'
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -137,6 +143,7 @@ def main() -> int:
         for output in logs:
             output.close()
         mail_sink.close()
+        mock_llm.close()
         shutil.rmtree(mail_dir)
         with session_scope() as db:
             registered_ids = db.execute(select(User.id).where(User.email.like(registration_prefix + '-%@example.com'))).scalars().all()
@@ -149,6 +156,9 @@ def main() -> int:
                 else:
                     db.delete(llm_row)
             run_ids = select(ValidationRun.id).where(ValidationRun.created_by.in_(user_ids))
+            db.execute(delete(AiReviewDecision).where(
+                AiReviewDecision.review_id.in_(select(AiReview.id).where(AiReview.run_id.in_(run_ids)))))
+            db.execute(delete(AiReview).where(AiReview.run_id.in_(run_ids)))
             db.execute(delete(Finding).where(Finding.run_id.in_(run_ids)))
             db.execute(delete(ValidationDocument).where(ValidationDocument.run_id.in_(run_ids)))
             db.execute(delete(ValidationRun).where(ValidationRun.created_by.in_(user_ids)))

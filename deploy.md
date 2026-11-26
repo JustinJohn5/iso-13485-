@@ -2,6 +2,7 @@
 
 ## 更新记录
 
+- 2026-11-26：新增预筛结果中的 AI 查找依据、逐项审阅及人工决定追加留痕；API Key 沿用网页加密配置。新增 `ai_reviews` 与 `ai_review_decisions` 表，先在 `_codextest` 验证 `MigrateAiReviews.py`，再按授权流程迁移目标数据库；无新增环境变量、端口或依赖。
 - 2026-11-24：验证码仅用于注册和修改密码，登录不变。新增 SMTP 配置、来源 IP 小时限流及可信代理设置，公开注册响应不暴露邮箱是否已注册。
 - 2026-11-24：注册验证码请求增加 MySQL 来源 IP 小时限流；统一邮箱是否已注册时的公开响应，并新增可信代理配置。迁移同时创建 `email_verification_ip_limits` 表。
 
@@ -631,3 +632,17 @@ AI 来源和模型标识保存在修订快照；不自动填写批准、生效�
 - 新版报告附带 `prescreen` 和 `assessment_status`，保留 `status` 字段。草稿和套册生成件响应增加条款依据、自检和待补信息。
 - 套册保留当前检查和最近三次归档检查。详情返回历史摘要，`GET /api/v1/manual-suites/{uid}/inspections/{revision}` 可按档案修订读取检查快照。
 - 在 MySQL 8.4 测试副本验证模板生成、两种审核范围、冲突结果、模拟内审及打包。核对网页规则手册显示 2.0.0。使用方式见 `tests/README.md`。
+
+### 5.9 AI 文件阅读审核
+
+本功能沿用网页“模型配置”中的 OpenAI 兼容服务，不新增模型环境变量、依赖或监听端口。既有数据库先在 MySQL 8.4 的 `_codextest` 副本迁移并回归；以下命令在 `backend` 目录执行，Windows 将 `.venv/bin/python` 替换为 `.venv/Scripts/python.exe`：
+
+```bash
+./.venv/bin/python MigrateAiReviews.py --env-file ../.env.test
+```
+
+从项目根目录运行 `./backend/.venv/bin/python tests/RunE2e.py tests/e2e/AiReview.spec.ts`。确认 AI 两种模式、原文行号、决定留痕、分数不变和权限隔离后，再对开发库运行 `./.venv/bin/python MigrateAiReviews.py`。正式库只可在获得发布授权后使用正式 `.env` 和 `--allow-production` 迁移。
+
+迁移幂等创建 `ai_reviews` 与 `ai_review_decisions` 两张表；新环境由初始化导入模型后建表。回退应用时保留审阅记录，不删除数据库表。`POST /api/v1/validations/{run_uid}/ai-reviews` 创建单规则、单文件分析，`GET` 读取该任务记录，`PATCH /api/v1/ai-reviews/{review_uid}/decision` 追加人工决定。所有文件必须来自已完成任务，且受任务所有者/管理员权限约束。
+
+结果接口的 `documents` 对象新增 `file_uid`，用于让用户选择本次预筛中的文件；原文件名、文件类型和其他字段保持。AI 引用需要在指定抽取片段中逐字匹配，位置仅表示抽取文本行号。AI 结果不写回预筛快照、Finding、分数或覆盖率。AI 配置及数据保留策略按现有 MySQL 和安全配置备份制度维护。

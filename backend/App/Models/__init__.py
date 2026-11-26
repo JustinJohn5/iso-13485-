@@ -12,6 +12,7 @@ from App.Models.UploadedFile import UploadedFile
 from App.Models.User import User
 from App.Models.ValidationDocument import ValidationDocument
 from App.Models.ValidationRun import ValidationRun
+from App.Models.AiReview import AiReview, AiReviewDecision
 
 __all__ = [
     "AuditLog",
@@ -26,4 +27,6 @@ __all__ = [
     "User",
     "ValidationDocument",
     "ValidationRun",
+    "AiReview",
+    "AiReviewDecision",
 ]
