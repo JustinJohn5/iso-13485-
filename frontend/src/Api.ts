@@ -86,15 +86,32 @@ export interface ValidationResult {
 
 const apiBase = import.meta.env.VITE_API_BASE_URL;
 
+export class ApiRequestError extends Error {
+  constructor(message: string, public readonly status: number, public readonly code = 0) {
+    super(message);
+    this.name = 'ApiRequestError';
+  }
+}
+
 export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (!apiBase) throw new Error('缺少前端配置 VITE_API_BASE_URL');
-  const response = await fetch(`${apiBase}${path}`, {
-    ...init,
-    credentials: 'include',
-    headers: { ...init.headers },
-  });
-  const envelope = (await response.json()) as ApiEnvelope<T>;
-  if (!response.ok || envelope.code !== 0) throw new Error(envelope.message || '请求失败');
+  let response: Response;
+  try {
+    response = await fetch(`${apiBase}${path}`, {
+      ...init,
+      credentials: 'include',
+      headers: { ...init.headers },
+    });
+  } catch {
+    throw new ApiRequestError('无法连接后端服务，请检查网络或联系管理员确认服务及跨域配置。', 0);
+  }
+  let envelope: ApiEnvelope<T>;
+  try { envelope = (await response.json()) as ApiEnvelope<T>; }
+  catch { throw new ApiRequestError(`服务响应格式异常（HTTP ${response.status}），请联系管理员。`, response.status); }
+  if (!envelope || typeof envelope.code !== 'number') {
+    throw new ApiRequestError(`服务响应格式异常（HTTP ${response.status}），请联系管理员。`, response.status);
+  }
+  if (!response.ok || envelope.code !== 0) throw new ApiRequestError(envelope.message || '请求失败', response.status, envelope.code);
   return envelope.data;
 }
 

@@ -109,10 +109,12 @@ def create_ai_review(
             result, model, latency = search_evidence(db, rule, file.file_uid, file.extracted_text)
         else:
             result, model, latency = review_requirements(db, rule, file.file_uid, file.extracted_text)
-    except ApiError:
+    except ApiError as exc:
         AuditLogDao.add(db, user_id=user.id, action="ai_review_failed", target_type="validation_run",
                         target_id=run_uid, detail=f"{payload.mode}:{payload.rule_id}")
         db.commit()
+        if exc.code == 1402:
+            raise ApiError(1402, "AI 文件审阅失败或输出格式异常，请检查模型配置或稍后重试；已有审阅记录和预筛结果已保留") from None
         raise
 
     row = AiReview(

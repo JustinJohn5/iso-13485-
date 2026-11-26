@@ -4,6 +4,7 @@
 
 - 沿用 Python 3.12.10 和项目虚拟环境。在 `backend` 目录执行 `python -m pip install -r requirements.lock`，需要时安装 `pytest`。单元测试不连接数据库。
 - 前端与根目录分别执行 `npm ci`，沿用 Node.js 26.13.1。根目录执行 `npx playwright install chromium`；已安装 Edge 时也可配置 `E2E_BROWSER_CHANNEL=msedge`。
+- ASGI 接口异常测试另需测试依赖 `python -m pip install pytest==9.2.0 httpx==0.28.1`，仅安装到既有后端虚拟环境；不加入生产依赖。它注入数据库依赖故障且不连接数据库，配置和临时目录由用例隔离生成。
 - E2E 使用 MySQL 8.4 的独立库（如 `iso13485_codextest`），先用当前发布版本初始化表。严禁使用开发或正式业务库。无需每次重建测试库。
 - `.env.test` 须配置 `E2E_SMTP_PORT=5425`（选择空闲端口）。测试入口临时启动仅监听本机的 STARTTLS SMTP 收件箱，动态生成授权值与证书，用真实发信模块收件；不会向真实邮箱投递。`tests/Helpers/MailSink.py` 依赖既有 `cryptography`，无需新增依赖。端口与开发、正式服务错开。
 - AI 审阅 E2E 由 `tests/Helpers/MockLlmServer.py` 临时启动仅绑定 `127.0.0.1` 的 OpenAI 兼容模拟服务，使用随机空闲端口，不访问外部模型服务；测试通过管理员 API 临时配置，结束时恢复测试库原配置。
@@ -15,6 +16,7 @@
 
 ```bash
 python -m pytest ../tests/Services -q
+python -m pytest ../tests/Api/test_ErrorResponses.py -q
 python -m pytest ../tests/Services/test_DocumentClassifier.py -q
 python -m pytest ../tests/Services/test_RuleEngine.py -q
 python -m pytest ../tests/Services/test_RequirementCatalog.py ../tests/Services/test_GenerationRules.py ../tests/Services/test_Prescreen.py -q
@@ -74,6 +76,7 @@ Windows 若出现 Playwright 转换缓存的 `EPERM`，可在专用测试终端�
 
 - `tests/Services/test_AiDraft.py`：SDK 超时/重试配置、脱敏日志、未配置拒绝、异常 JSON 和章节合同；使用合成数据与模拟客户端，不调用真实模型。
 - `tests/Services/test_AiReview.py`：候选片段行号、原文引用精确匹配、逐项完整覆盖和未检出范围约束。`tests/e2e/AiReview.spec.ts` 验证两种模式、人工修改采纳历史、其他用户越权拒绝及预筛分数不变；只调用本地合成 OpenAI 兼容服务。
+- `tests/Api/test_ErrorResponses.py`：真实 ASGI 异常响应、缺表迁移提示、允许与未知来源的 CORS 边界，不连接数据库。`tests/e2e/AiReviewRecovery.spec.ts`：模型停用拒绝、启用恢复、缺迁移提示后重试，以及实际合成模型调用失败不新增记录、不改变预筛；执行 `python tests/RunE2e.py tests/e2e/AiReviewRecovery.spec.ts`，沿用上述测试副本与模拟服务。
 - `tests/e2e/LlmSettings.spec.ts`：管理员配置、API Key 密文入库且不回显、审核员越权拒绝、实际模型调用失败后保留草稿。测试结束仅在配置仍由本次账号修改时恢复原测试库配置，不触碰开发/正式配置。
 - 模型配置权限回归还覆盖普通账号直接打开配置页面、服务端拒绝无权限的合法及非法参数请求，并比较拒绝前后的测试库配置一致。单项执行 `python tests/RunE2e.py tests/e2e/LlmSettings.spec.ts`。
 

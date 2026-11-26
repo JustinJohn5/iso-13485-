@@ -1,4 +1,6 @@
 import { aiReviewApi } from '../Api/AiReview';
+import { llmApi } from '../Api/Llm';
+import { ApiRequestError } from '../Api';
 import type { AiReviewDecisionKind, AiReviewRecord } from '../Types/AiReview';
 import type { ValidationResult } from '../Api';
 import { escape } from '../Utils/Html';
@@ -59,6 +61,7 @@ export function renderAiReviewPanel(data: ValidationResult): string {
       <button type="button" class="button button-primary" data-testid="ai-review-start">开始 AI 审阅</button>
     </div>
     <p class="ai-review-panel-status" role="status" data-testid="ai-review-status"></p>
+    <button type="button" class="button button-secondary" data-testid="ai-review-retry">重新检查并加载记录</button>
     <div class="ai-review-list" data-testid="ai-review-list"><p>正在读取本次任务的 AI 审阅记录…</p></div>
   </section>`;
 }
@@ -70,8 +73,17 @@ export function bindAiReviewEvents(root: HTMLElement, data: ValidationResult): v
   const status = panel.querySelector<HTMLElement>('[data-testid="ai-review-status"]')!;
   const records: AiReviewRecord[] = [];
   const startButton = panel.querySelector<HTMLButtonElement>('[data-testid="ai-review-start"]')!;
-  let pending = true;
+  const retryButton = panel.querySelector<HTMLButtonElement>('[data-testid="ai-review-retry"]')!;
+  let pending = false;
+  let ready = false;
+  let loaded = false;
   startButton.disabled = true;
+
+  const updateControls = () => {
+    panel.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | HTMLButtonElement>('input, select, textarea, button')
+      .forEach(control => { control.disabled = pending; });
+    startButton.disabled = pending || !ready || !loaded;
+  };
 
   const paint = () => {
     list.innerHTML = records.length ? records.slice().reverse().map(reviewCard).join('') : '<p>本次预筛尚无 AI 审阅记录。</p>';
@@ -90,7 +102,7 @@ export function bindAiReviewEvents(root: HTMLElement, data: ValidationResult): v
       if (!note) { formStatus.textContent = '请先填写人工说明。'; return; }
       if (decision === 'accepted_edited' && !edited) { formStatus.textContent = '请填写修改后的审阅内容。'; return; }
       pending = true;
-      card.querySelectorAll<HTMLButtonElement>('button').forEach(item => { item.disabled = true; });
+      updateControls();
       try {
         const saved = await aiReviewApi.decide(card.dataset.reviewCard!, decision, note, decision === 'accepted_edited' ? edited : '');
         const record = records.find(item => item.review_uid === card.dataset.reviewCard);
@@ -101,35 +113,49 @@ export function bindAiReviewEvents(root: HTMLElement, data: ValidationResult): v
         formStatus.textContent = error instanceof Error ? error.message : '人工决定保存失败';
       } finally {
         pending = false;
-        card.querySelectorAll<HTMLButtonElement>('button').forEach(item => { item.disabled = false; });
+        updateControls();
       }
     }));
   };
 
-  startButton.addEventListener('click', async event => {
-    if (pending) return;
-    const button = event.currentTarget as HTMLButtonElement;
+  startButton.addEventListener('click', async () => {
+    if (pending || !ready || !loaded) return;
     const mode = panel.querySelector<HTMLInputElement>('input[name="ai-review-mode"]:checked')?.value as 'evidence_search' | 'semantic_review';
     const ruleId = panel.querySelector<HTMLSelectElement>('[data-testid="ai-review-rule"]')!.value;
     const fileUid = panel.querySelector<HTMLSelectElement>('[data-testid="ai-review-file"]')!.value;
-    pending = true; button.disabled = true; status.textContent = '正在生成 AI 候选意见…';
+    pending = true; updateControls(); status.textContent = '正在生成 AI 候选意见…';
     try {
       const created = await aiReviewApi.create(data.run_uid, mode, ruleId, fileUid);
       records.push(created); status.textContent = '候选意见已保存，请核对原文。'; paint();
     } catch (error) {
-      status.textContent = error instanceof Error ? error.message : 'AI 审阅失败';
+      if (error instanceof ApiRequestError && error.code === 1401) ready = false;
+      if (error instanceof ApiRequestError && error.code === 1502) loaded = false;
+      status.textContent = error instanceof ApiRequestError && error.code === 1401
+        ? '模型尚未启用或配置不完整，请联系管理员完成模型配置，再重新检查。'
+        : error instanceof Error ? error.message : 'AI 审阅失败';
     } finally {
-      pending = false; button.disabled = false;
+      pending = false; updateControls();
     }
   });
 
-  void aiReviewApi.list(data.run_uid).then(rows => {
-    records.push(...rows); paint();
-  }).catch(error => {
-    list.innerHTML = '<p>暂时无法读取 AI 审阅记录。</p>';
-    status.textContent = error instanceof Error ? error.message : '读取审阅记录失败';
-  }).finally(() => {
-    pending = false;
-    startButton.disabled = false;
-  });
+  const reload = async () => {
+    if (pending) return;
+    pending = true; updateControls(); status.textContent = '正在检查模型状态并读取审阅记录…';
+    try {
+      const [history, model] = await Promise.allSettled([aiReviewApi.list(data.run_uid), llmApi.status()]);
+      if (!panel.isConnected) return;
+      loaded = history.status === 'fulfilled';
+      ready = model.status === 'fulfilled' && model.value.ready;
+      if (history.status === 'fulfilled') {
+        records.splice(0, records.length, ...history.value); paint();
+      } else list.innerHTML = '<p>暂时无法读取 AI 审阅记录，请重新加载。</p>';
+      const failure = history.status === 'rejected' ? history.reason : model.status === 'rejected' ? model.reason : null;
+      status.textContent = failure ? (failure instanceof Error ? failure.message : '读取审阅信息失败，请重试。')
+        : ready ? '' : '模型尚未启用或配置不完整，请联系管理员完成模型配置，再重新检查。';
+    } finally {
+      pending = false; updateControls();
+    }
+  };
+  retryButton.addEventListener('click', () => { void reload(); });
+  void reload();
 }
